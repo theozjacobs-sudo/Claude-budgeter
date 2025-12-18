@@ -1,5 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Set worker source for PDF.js
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 const STORAGE_KEY = 'budget-planner-transactions';
 const FIXED_EXPENSES_KEY = 'budget-planner-fixed-expenses';
@@ -34,17 +38,50 @@ function learnCategory(description, category) {
 }
 
 // Category definitions with keywords for auto-categorization
+// Includes international terms (Italian, Spanish, French, German)
 const CATEGORIES = {
-  'Groceries': ['grocery', 'safeway', 'trader joe', 'whole foods', 'kroger', 'walmart', 'target', 'costco', 'aldi', 'publix', 'wegmans', 'heb', 'food', 'market'],
-  'Dining': ['restaurant', 'cafe', 'coffee', 'starbucks', 'mcdonald', 'chipotle', 'doordash', 'uber eats', 'grubhub', 'seamless', 'postmates', 'pizza', 'burger', 'taco', 'sushi', 'thai', 'indian', 'chinese', 'mexican'],
-  'Transport': ['uber', 'lyft', 'gas', 'shell', 'chevron', 'exxon', 'bp', 'parking', 'transit', 'metro', 'subway', 'bart', 'caltrain', 'amtrak'],
-  'Shopping': ['amazon', 'ebay', 'etsy', 'clothing', 'shoes', 'nordstrom', 'macys', 'gap', 'old navy', 'zara', 'h&m', 'uniqlo', 'best buy', 'apple store'],
-  'Entertainment': ['netflix', 'spotify', 'hulu', 'disney', 'hbo', 'movie', 'theater', 'concert', 'ticket', 'game', 'steam', 'playstation', 'xbox'],
-  'Health': ['pharmacy', 'cvs', 'walgreens', 'doctor', 'medical', 'hospital', 'dental', 'vision', 'gym', 'fitness'],
-  'Bills': ['electric', 'water', 'gas bill', 'internet', 'phone', 'verizon', 'at&t', 't-mobile', 'comcast', 'insurance'],
+  'Groceries': [
+    'grocery', 'safeway', 'trader joe', 'whole foods', 'kroger', 'walmart', 'target', 'costco', 'aldi', 'publix', 'wegmans', 'heb', 'food', 'market',
+    // International
+    'supermercato', 'supermarket', 'mercado', 'carrefour', 'lidl', 'tesco', 'sainsbury', 'coop', 'esselunga', 'conad', 'simply', 'eurospin'
+  ],
+  'Dining': [
+    'restaurant', 'cafe', 'coffee', 'starbucks', 'mcdonald', 'chipotle', 'doordash', 'uber eats', 'grubhub', 'seamless', 'postmates', 'pizza', 'burger', 'taco', 'sushi', 'thai', 'indian', 'chinese', 'mexican',
+    // Italian
+    'trattoria', 'ristorante', 'osteria', 'pizzeria', 'locanda', 'taverna', 'gelateria', 'pasticceria', 'panetteria', 'rosticceria',
+    // Other international
+    'brasserie', 'bistro', 'gasthaus', 'cerveceria', 'tapas', 'lido'
+  ],
+  'Transport': [
+    'uber', 'lyft', 'gas', 'shell', 'chevron', 'exxon', 'bp', 'parking', 'transit', 'metro', 'subway', 'bart', 'caltrain', 'amtrak',
+    // International
+    'eni', 'agip', 'total', 'repsol', 'autostrada', 'trenitalia', 'italo', 'flixbus', 'renfe', 'sncf'
+  ],
+  'Shopping': [
+    'amazon', 'ebay', 'etsy', 'clothing', 'shoes', 'nordstrom', 'macys', 'gap', 'old navy', 'zara', 'h&m', 'uniqlo', 'best buy', 'apple store',
+    // Art/crafts
+    'artwork', 'gallery', 'arte', 'artisan'
+  ],
+  'Entertainment': ['netflix', 'spotify', 'hulu', 'disney', 'hbo', 'movie', 'theater', 'concert', 'ticket', 'game', 'steam', 'playstation', 'xbox', 'cinema', 'museo', 'museum'],
+  'Health': [
+    'pharmacy', 'cvs', 'walgreens', 'doctor', 'medical', 'hospital', 'dental', 'vision', 'gym', 'fitness',
+    // International
+    'farmacia', 'apotheke', 'pharmacie', 'clinica', 'ospedale'
+  ],
+  'Bills': ['electric', 'water', 'gas bill', 'internet', 'phone', 'verizon', 'at&t', 't-mobile', 'comcast', 'insurance', 'comune', 'municipality', 'ayuntamiento'],
   'Subscriptions': ['subscription', 'monthly', 'annual', 'membership', 'patreon', 'substack'],
-  'Bars': ['bar', 'pub', 'brewery', 'tavern', 'wine', 'liquor', 'beer', 'cocktail'],
-  'Travel': ['airline', 'hotel', 'airbnb', 'vrbo', 'booking', 'expedia', 'flight', 'united', 'delta', 'american airlines', 'southwest'],
+  'Bars': [
+    'bar', 'pub', 'brewery', 'tavern', 'wine', 'liquor', 'beer', 'cocktail',
+    // International
+    'enoteca', 'birreria', 'cantina', 'bodega'
+  ],
+  'Travel': [
+    'airline', 'hotel', 'airbnb', 'vrbo', 'booking', 'expedia', 'flight', 'united', 'delta', 'american airlines', 'southwest',
+    // International accommodations
+    'hostel', 'hostelworld', 'b&b', 'albergo', 'pensione', 'agriturismo', 'resort', 'motel',
+    // Travel sites
+    'kayak', 'skyscanner', 'tripadvisor', 'hotels.com', 'ryanair', 'easyjet', 'lufthansa', 'alitalia'
+  ],
   'Other': []
 };
 
@@ -160,17 +197,139 @@ function parseCSV(text) {
   return transactions;
 }
 
+// Parse Chase-style PDF bank statements
+async function parsePDF(arrayBuffer) {
+  const transactions = [];
+
+  try {
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+
+    // Extract text from all pages
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+
+    // Parse Chase Freedom style format
+    // Pattern: MM/DD MERCHANT_NAME [location] [currency info] AMOUNT
+    const lines = fullText.split('\n');
+
+    // Regex for Chase format: date, then description, then amount at end
+    const transactionRegex = /(\d{1,2}\/\d{1,2})\s+(.+?)\s+(-?[\d,]+\.\d{2})(?:\s|$)/g;
+
+    for (const line of lines) {
+      let match;
+      while ((match = transactionRegex.exec(line)) !== null) {
+        const [, date, rawDescription, amountStr] = match;
+
+        // Clean up description - remove currency conversion info
+        let description = rawDescription
+          .replace(/\d{1,2}\/\d{1,2}\s+EURO.*$/i, '') // Remove "09/24 EURO ..." suffix
+          .replace(/[\d.,]+\s*X\s*[\d.]+\s*\(EXCHG RATE\)/gi, '') // Remove exchange rate info
+          .trim();
+
+        // Skip if description is empty or looks like a header
+        if (!description || description.length < 3) continue;
+        if (/^(PURCHASE|PAYMENT|CREDIT|DATE|AMOUNT|TRANSACTION)/i.test(description)) continue;
+
+        const amount = parseFloat(amountStr.replace(',', ''));
+        if (isNaN(amount) || amount === 0) continue;
+
+        transactions.push({
+          id: Date.now() + transactions.length + Math.random(),
+          date: date,
+          description: description,
+          amount: -Math.abs(amount), // Purchases are expenses (negative)
+          category: categorizeTransaction(description),
+        });
+      }
+    }
+
+    // Also try line-by-line parsing for multi-line entries
+    const dateLineRegex = /^(\d{1,2}\/\d{1,2})\s+([A-Z][\w\s\*\'&.-]+)/;
+    const amountRegex = /(-?[\d,]+\.\d{2})$/;
+
+    let currentDate = null;
+    let currentDesc = '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // Check if line starts with a date
+      const dateMatch = trimmed.match(dateLineRegex);
+      if (dateMatch) {
+        currentDate = dateMatch[1];
+        currentDesc = dateMatch[2].trim();
+
+        // Check if amount is on same line
+        const amountMatch = trimmed.match(amountRegex);
+        if (amountMatch && currentDesc) {
+          const amount = parseFloat(amountMatch[1].replace(',', ''));
+          // Remove amount from description
+          const cleanDesc = currentDesc.replace(amountRegex, '').trim();
+          if (cleanDesc.length > 2 && !isNaN(amount) && amount !== 0) {
+            // Check if we already have this transaction
+            const exists = transactions.some(t =>
+              t.date === currentDate &&
+              t.description.toLowerCase().includes(cleanDesc.toLowerCase().slice(0, 10))
+            );
+            if (!exists) {
+              transactions.push({
+                id: Date.now() + transactions.length + Math.random(),
+                date: currentDate,
+                description: cleanDesc,
+                amount: -Math.abs(amount),
+                category: categorizeTransaction(cleanDesc),
+              });
+            }
+          }
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error('PDF parsing error:', error);
+  }
+
+  return transactions;
+}
+
 function FileUpload({ onUpload }) {
   const [dragOver, setDragOver] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleFile = (file) => {
-    if (file && file.type === 'text/csv') {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const transactions = parseCSV(e.target.result);
-        onUpload(transactions);
-      };
-      reader.readAsText(file);
+  const handleFile = async (file) => {
+    if (!file) return;
+
+    setLoading(true);
+    try {
+      if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const transactions = parseCSV(e.target.result);
+          onUpload(transactions);
+          setLoading(false);
+        };
+        reader.readAsText(file);
+      } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const transactions = await parsePDF(e.target.result);
+          onUpload(transactions);
+          setLoading(false);
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        alert('Please upload a CSV or PDF file');
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('File processing error:', error);
+      setLoading(false);
     }
   };
 
@@ -190,27 +349,31 @@ function FileUpload({ onUpload }) {
     <div
       className={`glass-card rounded-2xl p-8 text-center border-2 border-dashed transition-all ${
         dragOver ? 'border-indigo-400 bg-indigo-500/10' : 'border-white/20'
-      }`}
+      } ${loading ? 'opacity-70 pointer-events-none' : ''}`}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
     >
-      <div className="text-4xl mb-4">📄</div>
-      <h3 className="text-lg font-semibold text-white mb-2">Upload Bank Statement</h3>
+      <div className="text-4xl mb-4">{loading ? '⏳' : '📄'}</div>
+      <h3 className="text-lg font-semibold text-white mb-2">
+        {loading ? 'Processing...' : 'Upload Bank Statement'}
+      </h3>
       <p className="text-gray-400 text-sm mb-4">
-        Drag & drop a CSV file or click to browse
+        {loading ? 'Parsing your statement' : 'Drag & drop a CSV or PDF file'}
       </p>
-      <label className="inline-block bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-6 py-2 rounded-xl cursor-pointer hover:shadow-lg hover:scale-105 transition-all">
-        Choose File
-        <input
-          type="file"
-          accept=".csv"
-          onChange={handleChange}
-          className="hidden"
-        />
-      </label>
+      {!loading && (
+        <label className="inline-block bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-6 py-2 rounded-xl cursor-pointer hover:shadow-lg hover:scale-105 transition-all">
+          Choose File
+          <input
+            type="file"
+            accept=".csv,.pdf"
+            onChange={handleChange}
+            className="hidden"
+          />
+        </label>
+      )}
       <p className="text-gray-500 text-xs mt-4">
-        Supports CSV exports from most banks (Chase, Bank of America, Wells Fargo, etc.)
+        Supports CSV and PDF statements (Chase, Bank of America, Wells Fargo, etc.)
       </p>
     </div>
   );
@@ -225,33 +388,56 @@ function TransactionList({ transactions, onUpdateCategory, onDelete }) {
 
   const expenses = filtered.filter(t => t.amount < 0);
 
+  // Open Google search or Maps for a merchant
+  const lookupMerchant = (description) => {
+    // Clean description for search
+    const cleanDesc = description
+      .replace(/[#*]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    // Open Google Maps search (good for businesses)
+    window.open(`https://www.google.com/maps/search/${encodeURIComponent(cleanDesc)}`, '_blank');
+  };
+
   return (
     <div className="glass-card rounded-2xl p-5">
       <div className="flex justify-between items-center mb-4">
         <h3 className="font-semibold text-white">Transactions ({expenses.length})</h3>
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="rounded-xl px-3 py-1.5 text-sm"
-        >
-          <option value="all">All Categories</option>
-          {Object.keys(CATEGORIES).map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Click 🔍 to identify merchants</span>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="rounded-xl px-3 py-1.5 text-sm"
+          >
+            <option value="all">All Categories</option>
+            {Object.keys(CATEGORIES).map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+        </div>
       </div>
       <div className="space-y-2 max-h-80 overflow-y-auto">
         {expenses.length === 0 ? (
           <p className="text-gray-400 text-center py-4">No transactions to show</p>
         ) : (
           expenses.map(t => (
-            <div key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 group">
+            <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-white/5 group">
               <div
                 className="w-3 h-3 rounded-full shrink-0"
                 style={{ backgroundColor: CATEGORY_COLORS[t.category] }}
               />
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-gray-300 truncate">{t.description}</div>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-gray-300 truncate">{t.description}</span>
+                  <button
+                    onClick={() => lookupMerchant(t.description)}
+                    className="text-gray-500 hover:text-indigo-400 text-xs shrink-0"
+                    title="Look up on Google Maps"
+                  >
+                    🔍
+                  </button>
+                </div>
                 <div className="text-xs text-gray-500">{t.date}</div>
               </div>
               <select
@@ -263,7 +449,7 @@ function TransactionList({ transactions, onUpdateCategory, onDelete }) {
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
-              <div className="text-red-400 font-medium text-sm w-20 text-right">
+              <div className="text-red-400 font-medium text-sm w-16 text-right">
                 ${Math.abs(t.amount).toFixed(2)}
               </div>
               <button
