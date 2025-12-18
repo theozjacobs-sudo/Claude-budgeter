@@ -6,10 +6,10 @@ function TabButton({ active, onClick, children }) {
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+      className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
         active
-          ? 'bg-blue-500 text-white'
-          : 'bg-white text-gray-600 hover:bg-gray-100'
+          ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg glow-blue'
+          : 'glass-card text-gray-300 hover:text-white'
       }`}
     >
       {children}
@@ -21,9 +21,17 @@ export default function BudgetPlanner() {
   const [activeTab, setActiveTab] = useState('weekly');
 
   return (
-    <div className="p-4 space-y-4 bg-gray-50 min-h-screen max-w-3xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-6 min-h-screen max-w-3xl mx-auto">
+      {/* Header */}
+      <div className="text-center pt-4">
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">
+          Budget Planner
+        </h1>
+        <p className="text-gray-400 text-sm">Track spending, plan your future</p>
+      </div>
+
       {/* Tab Navigation */}
-      <div className="flex gap-2">
+      <div className="flex gap-3 justify-center">
         <TabButton
           active={activeTab === 'weekly'}
           onClick={() => setActiveTab('weekly')}
