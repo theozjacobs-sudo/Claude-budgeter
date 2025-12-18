@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
 
 const STORAGE_KEY = 'budget-planner-transactions';
 const FIXED_EXPENSES_KEY = 'budget-planner-fixed-expenses';
+const LEARNED_CATEGORIES_KEY = 'budget-planner-learned-categories';
 
 // Default fixed expenses
 const DEFAULT_FIXED_EXPENSES = [
@@ -12,6 +13,25 @@ const DEFAULT_FIXED_EXPENSES = [
   { id: 4, name: 'Phone', amount: 45, color: '#d946ef' },
   { id: 5, name: 'Insurance', amount: 150, color: '#ec4899' },
 ];
+
+// Load learned categories from localStorage
+function getLearnedCategories() {
+  try {
+    const saved = localStorage.getItem(LEARNED_CATEGORIES_KEY);
+    return saved ? JSON.parse(saved) : {};
+  } catch {
+    return {};
+  }
+}
+
+// Save a learned category mapping
+function learnCategory(description, category) {
+  const learned = getLearnedCategories();
+  // Normalize the description to a key (lowercase, trim extra spaces)
+  const key = description.toLowerCase().trim();
+  learned[key] = category;
+  localStorage.setItem(LEARNED_CATEGORIES_KEY, JSON.stringify(learned));
+}
 
 // Category definitions with keywords for auto-categorization
 const CATEGORIES = {
@@ -43,7 +63,22 @@ const CATEGORY_COLORS = {
 };
 
 function categorizeTransaction(description) {
-  const lower = description.toLowerCase();
+  const lower = description.toLowerCase().trim();
+
+  // First, check if we have a learned category for this exact description
+  const learned = getLearnedCategories();
+  if (learned[lower]) {
+    return learned[lower];
+  }
+
+  // Also check if any learned keyword is contained in the description
+  for (const [learnedDesc, category] of Object.entries(learned)) {
+    if (lower.includes(learnedDesc) || learnedDesc.includes(lower)) {
+      return category;
+    }
+  }
+
+  // Fall back to default keyword matching
   for (const [category, keywords] of Object.entries(CATEGORIES)) {
     if (keywords.some(keyword => lower.includes(keyword))) {
       return category;
@@ -527,6 +562,59 @@ function FixedExpensesSection({ expenses, onUpdate }) {
   );
 }
 
+function LearnedCategoriesInfo() {
+  const [learned, setLearned] = useState(() => getLearnedCategories());
+  const [expanded, setExpanded] = useState(false);
+
+  const count = Object.keys(learned).length;
+
+  const handleClear = () => {
+    if (confirm('Clear all learned categories? Future uploads will use default categorization.')) {
+      localStorage.removeItem(LEARNED_CATEGORIES_KEY);
+      setLearned({});
+    }
+  };
+
+  if (count === 0) return null;
+
+  return (
+    <div className="glass-card rounded-xl p-3">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-300"
+        >
+          <span className="text-indigo-400">🧠</span>
+          <span>{count} learned merchant{count !== 1 ? 's' : ''}</span>
+          <span className="text-xs">{expanded ? '▼' : '▶'}</span>
+        </button>
+        <button
+          onClick={handleClear}
+          className="text-xs text-gray-500 hover:text-red-400"
+        >
+          Clear
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
+          {Object.entries(learned).map(([desc, cat]) => (
+            <div key={desc} className="flex items-center justify-between text-xs">
+              <span className="text-gray-400 truncate flex-1 mr-2">{desc}</span>
+              <span
+                className="px-2 py-0.5 rounded-full text-white"
+                style={{ backgroundColor: CATEGORY_COLORS[cat] || '#6b7280' }}
+              >
+                {cat}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TopSpendingWarnings({ transactions, monthlyBudget = 6400 }) {
   const categoryTotals = useMemo(() => {
     const totals = {};
@@ -612,6 +700,11 @@ export default function BankStatements() {
 
   const handleUpdateCategory = (id, category) => {
     setTransactions(prev => {
+      const transaction = prev.find(t => t.id === id);
+      // Learn this categorization for future uploads
+      if (transaction) {
+        learnCategory(transaction.description, category);
+      }
       const updated = prev.map(t => t.id === id ? { ...t, category } : t);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       return updated;
@@ -664,6 +757,8 @@ export default function BankStatements() {
           />
         </>
       )}
+
+      <LearnedCategoriesInfo />
 
       <div className="text-center text-xs text-gray-400 space-y-1">
         <p>Your data stays in your browser - nothing is sent to any server</p>
