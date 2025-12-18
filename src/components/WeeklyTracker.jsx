@@ -29,7 +29,7 @@ function SpendingCategory({ category, spent, budget }) {
       <div className="flex justify-between text-sm mb-1.5">
         <span className="text-gray-300 group-hover:text-white transition-colors">{category}</span>
         <span className={over ? 'text-red-400 font-semibold' : 'text-gray-400'}>
-          ${spent.toFixed(0)} <span className="text-gray-500">/</span> ${budget}
+          ${spent.toFixed(0)} <span className="text-gray-400">/</span> ${budget}
         </span>
       </div>
       <ProgressBar spent={spent} budget={budget} />
@@ -92,7 +92,7 @@ export default function WeeklyTracker() {
             Reset Week
           </button>
         </div>
-        <div className="text-xs text-gray-500 mb-5">
+        <div className="text-xs text-gray-400 mb-5">
           Fixed costs (rent $2,425 + utils $200) already budgeted
         </div>
 
@@ -102,7 +102,7 @@ export default function WeeklyTracker() {
             ${remaining.toFixed(0)}
           </div>
           <div className="text-sm text-gray-400 mt-1">remaining this week</div>
-          <div className="text-xs text-gray-500 mt-2">
+          <div className="text-xs text-gray-400 mt-2">
             ${totalSpent.toFixed(0)} spent of ${totalBudget} budget
           </div>
         </div>
@@ -158,7 +158,7 @@ export default function WeeklyTracker() {
             <div key={cat.id} className="flex items-center gap-3">
               <span className="text-sm text-gray-400 flex-1">{cat.category}</span>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
                 <input
                   type="number"
                   value={cat.budget}
@@ -172,7 +172,7 @@ export default function WeeklyTracker() {
             <span className="text-sm flex-1 font-medium text-white">Weekly Discretionary</span>
             <span className="text-lg font-bold text-indigo-400">${totalBudget}</span>
           </div>
-          <div className="text-xs text-gray-500">
+          <div className="text-xs text-gray-400">
             Target: ~${WEEKLY_DISCRETIONARY}/week to hit $6,400/month
           </div>
         </div>

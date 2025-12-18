@@ -16,6 +16,12 @@
     min-width: 320px;
     background: transparent;
     min-height: 100vh;
+    color: #e5e7eb; /* gray-200 default text */
+  }
+
+  /* Ensure all text is light by default */
+  h1, h2, h3, h4, h5, h6, p, span, div, label, td, th {
+    color: inherit;
   }
 }
 

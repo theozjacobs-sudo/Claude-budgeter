@@ -40,7 +40,7 @@ function ParametersCard({ params, onChange }) {
           placeholder="0"
           className="w-full rounded-xl px-3 py-2 text-sm"
         />
-        <div className="text-xs text-gray-500 mt-1">
+        <div className="text-xs text-gray-400 mt-1">
           ~${Math.round(monthlySpend / 4.33)}/week
         </div>
       </div>
@@ -114,7 +114,7 @@ function ExpensesCard({ expenses, onToggle, onRemove, onAdd }) {
               onChange={() => onToggle(e.id)}
               className="shrink-0"
             />
-            <span className={`flex-1 truncate ${!e.enabled ? 'text-gray-600 line-through' : 'text-gray-300'}`}>
+            <span className={`flex-1 truncate ${!e.enabled ? 'text-gray-500 line-through' : 'text-gray-300'}`}>
               {e.name}
             </span>
             <span className={`text-xs shrink-0 font-medium ${e.priority === 'must' ? 'text-red-400' : 'text-gray-400'}`}>
@@ -193,7 +193,7 @@ function MonthlyTable({ projection, bonusMonth, params }) {
                     {isBonus && <span className="ml-1 text-yellow-400">★</span>}
                   </td>
                   <td className="text-right text-emerald-400">${row.income.toLocaleString()}</td>
-                  <td className="text-right text-gray-500">${FIXED_MONTHLY.toLocaleString()}</td>
+                  <td className="text-right text-gray-400">${FIXED_MONTHLY.toLocaleString()}</td>
                   <td className="text-right text-red-400">${(row.expenses - FIXED_MONTHLY).toLocaleString()}</td>
                   <td className={`text-right font-medium ${row.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {row.net >= 0 ? '+' : ''}${row.net.toLocaleString()}
@@ -293,6 +293,7 @@ function IncomeBreakdownChart({ projection, params }) {
           <Tooltip
             contentStyle={{ background: 'rgba(15, 15, 35, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
             labelStyle={{ color: 'white' }}
+            itemStyle={{ color: '#e5e7eb' }}
           />
           <Bar dataKey="paycheck" stackId="a" fill="#22c55e" name="Paycheck" />
           <Bar dataKey="bonus" stackId="a" fill="#eab308" name="Bonus" />
@@ -532,7 +533,7 @@ export default function YearlyProjection() {
       )}
 
       {/* Auto-save indicator */}
-      <div className="text-center text-xs text-gray-500">
+      <div className="text-center text-xs text-gray-400">
         Changes auto-saved to browser • Future: Upload bank statements for spending analysis
       </div>
     </div>
