@@ -1,44 +1,62 @@
 import { useState, useMemo, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { PAYCHECK, PAYDATES, MONTHS, DEFAULT_ONE_TIME_EXPENSES } from '../constants/budget';
+import {
+  ComposedChart, Line, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  ReferenceLine, Area, Cell, PieChart, Pie, Legend
+} from 'recharts';
+import { PAYCHECK, PAYDATES, MONTHS, DEFAULT_ONE_TIME_EXPENSES, FIXED_MONTHLY } from '../constants/budget';
 
 const STORAGE_KEY = 'budget-planner-data';
 
 function ParametersCard({ params, onChange }) {
   const { startingCash, monthlySpend, bonus, bonusMonth, subletterAmount } = params;
 
+  // Handle input to avoid leading zeros
+  const handleNumberChange = (key, value) => {
+    const numValue = value === '' ? 0 : parseInt(value, 10);
+    onChange(key, isNaN(numValue) ? 0 : numValue);
+  };
+
   return (
     <div className="glass-card rounded-2xl p-5 space-y-4">
       <h2 className="font-semibold text-sm text-white">Parameters</h2>
       <div>
-        <label className="text-xs text-gray-500 block mb-1">Starting cash</label>
+        <label className="text-xs text-gray-400 block mb-1">Starting cash</label>
         <input
-          type="number"
-          value={startingCash}
-          onChange={e => onChange('startingCash', +e.target.value)}
+          type="text"
+          inputMode="numeric"
+          value={startingCash || ''}
+          onChange={e => handleNumberChange('startingCash', e.target.value.replace(/[^0-9]/g, ''))}
+          placeholder="0"
           className="w-full rounded-xl px-3 py-2 text-sm"
         />
       </div>
       <div>
-        <label className="text-xs text-gray-500 block mb-1">Monthly spend</label>
+        <label className="text-xs text-gray-400 block mb-1">Monthly spend</label>
         <input
-          type="number"
-          value={monthlySpend}
-          onChange={e => onChange('monthlySpend', +e.target.value)}
+          type="text"
+          inputMode="numeric"
+          value={monthlySpend || ''}
+          onChange={e => handleNumberChange('monthlySpend', e.target.value.replace(/[^0-9]/g, ''))}
+          placeholder="0"
+          className="w-full rounded-xl px-3 py-2 text-sm"
+        />
+        <div className="text-xs text-gray-500 mt-1">
+          ~${Math.round(monthlySpend / 4.33)}/week
+        </div>
+      </div>
+      <div>
+        <label className="text-xs text-gray-400 block mb-1">Annual bonus</label>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={bonus || ''}
+          onChange={e => handleNumberChange('bonus', e.target.value.replace(/[^0-9]/g, ''))}
+          placeholder="0"
           className="w-full rounded-xl px-3 py-2 text-sm"
         />
       </div>
       <div>
-        <label className="text-xs text-gray-500 block mb-1">Bonus amount</label>
-        <input
-          type="number"
-          value={bonus}
-          onChange={e => onChange('bonus', +e.target.value)}
-          className="w-full rounded-xl px-3 py-2 text-sm"
-        />
-      </div>
-      <div>
-        <label className="text-xs text-gray-500 block mb-1">Bonus month</label>
+        <label className="text-xs text-gray-400 block mb-1">Bonus month</label>
         <select
           value={bonusMonth}
           onChange={e => onChange('bonusMonth', e.target.value)}
@@ -48,11 +66,13 @@ function ParametersCard({ params, onChange }) {
         </select>
       </div>
       <div>
-        <label className="text-xs text-gray-500 block mb-1">Subletter $</label>
+        <label className="text-xs text-gray-400 block mb-1">Subletter income</label>
         <input
-          type="number"
-          value={subletterAmount}
-          onChange={e => onChange('subletterAmount', +e.target.value)}
+          type="text"
+          inputMode="numeric"
+          value={subletterAmount || ''}
+          onChange={e => handleNumberChange('subletterAmount', e.target.value.replace(/[^0-9]/g, ''))}
+          placeholder="0"
           className="w-full rounded-xl px-3 py-2 text-sm"
         />
       </div>
@@ -77,9 +97,14 @@ function ExpensesCard({ expenses, onToggle, onRemove, onAdd }) {
     }
   };
 
+  const totalEnabled = expenses.filter(e => e.enabled).reduce((sum, e) => sum + e.amount, 0);
+
   return (
     <div className="glass-card rounded-2xl p-5">
-      <h2 className="font-semibold text-sm mb-3 text-white">One-Time Expenses</h2>
+      <div className="flex justify-between items-center mb-3">
+        <h2 className="font-semibold text-sm text-white">One-Time Expenses</h2>
+        <span className="text-xs text-indigo-400">${totalEnabled.toLocaleString()} total</span>
+      </div>
       <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
         {expenses.map(e => (
           <div key={e.id} className="flex items-center gap-2 text-sm group">
@@ -92,16 +117,16 @@ function ExpensesCard({ expenses, onToggle, onRemove, onAdd }) {
             <span className={`flex-1 truncate ${!e.enabled ? 'text-gray-600 line-through' : 'text-gray-300'}`}>
               {e.name}
             </span>
-            <span className={`text-xs shrink-0 font-medium ${e.priority === 'must' ? 'text-red-400' : 'text-gray-500'}`}>
+            <span className={`text-xs shrink-0 font-medium ${e.priority === 'must' ? 'text-red-400' : 'text-gray-400'}`}>
               ${e.amount}
             </span>
-            <span className="text-xs text-indigo-400 shrink-0 bg-indigo-500/10 px-2 py-0.5 rounded-full">{e.month}</span>
+            <span className="text-xs text-indigo-400 shrink-0 bg-indigo-500/20 px-2 py-0.5 rounded-full">{e.month}</span>
             {e.priority === 'custom' && (
               <button
                 onClick={() => onRemove(e.id)}
                 className="text-red-400 text-sm shrink-0 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center hover:bg-red-500/10 rounded"
               >
-                x
+                ×
               </button>
             )}
           </div>
@@ -116,9 +141,10 @@ function ExpensesCard({ expenses, onToggle, onRemove, onAdd }) {
         />
         <input
           placeholder="$"
-          type="number"
+          type="text"
+          inputMode="numeric"
           value={newExpense.amount}
-          onChange={e => setNewExpense(p => ({ ...p, amount: e.target.value }))}
+          onChange={e => setNewExpense(p => ({ ...p, amount: e.target.value.replace(/[^0-9]/g, '') }))}
           className="w-20 rounded-xl px-3 py-2 text-sm"
         />
         <select
@@ -139,37 +165,55 @@ function ExpensesCard({ expenses, onToggle, onRemove, onAdd }) {
   );
 }
 
-function MonthlyTable({ projection }) {
+function MonthlyTable({ projection, bonusMonth, params }) {
   return (
     <div className="glass-card rounded-2xl p-5">
       <h2 className="font-semibold text-sm mb-3 text-white">Monthly Breakdown</h2>
       <div className="overflow-x-auto -mx-5 px-5">
-        <table className="w-full text-xs min-w-[400px]">
+        <table className="w-full text-xs min-w-[500px]">
           <thead>
-            <tr className="text-left text-gray-500 border-b border-white/10">
+            <tr className="text-left text-gray-400 border-b border-white/10">
               <th className="py-2 font-medium">Month</th>
               <th className="text-right font-medium">Income</th>
-              <th className="text-right font-medium">Expenses</th>
+              <th className="text-right font-medium">Fixed</th>
+              <th className="text-right font-medium">Variable</th>
               <th className="text-right font-medium">Net</th>
               <th className="text-right font-medium">Balance</th>
+              <th className="text-right font-medium">Investable</th>
             </tr>
           </thead>
           <tbody>
-            {projection.map((row, i) => (
-              <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                <td className="py-2.5 text-gray-300">{row.month}</td>
-                <td className="text-right text-emerald-400">${row.income.toLocaleString()}</td>
-                <td className="text-right text-red-400">${row.expenses.toLocaleString()}</td>
-                <td className={`text-right font-medium ${row.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {row.net >= 0 ? '+' : ''}${row.net.toLocaleString()}
-                </td>
-                <td className={`text-right font-semibold ${row.balance < 0 ? 'text-red-400' : 'text-white'}`}>
-                  ${row.balance.toLocaleString()}
-                </td>
-              </tr>
-            ))}
+            {projection.map((row, i) => {
+              const investable = row.balance > 1000 ? row.balance - 1000 : 0;
+              const isBonus = row.hasBonus;
+              return (
+                <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${isBonus ? 'bg-yellow-500/5' : ''}`}>
+                  <td className="py-2.5 text-gray-300">
+                    {row.month}
+                    {isBonus && <span className="ml-1 text-yellow-400">★</span>}
+                  </td>
+                  <td className="text-right text-emerald-400">${row.income.toLocaleString()}</td>
+                  <td className="text-right text-gray-500">${FIXED_MONTHLY.toLocaleString()}</td>
+                  <td className="text-right text-red-400">${(row.expenses - FIXED_MONTHLY).toLocaleString()}</td>
+                  <td className={`text-right font-medium ${row.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {row.net >= 0 ? '+' : ''}${row.net.toLocaleString()}
+                  </td>
+                  <td className={`text-right font-semibold ${row.balance < 0 ? 'text-red-400' : 'text-white'}`}>
+                    ${row.balance.toLocaleString()}
+                  </td>
+                  <td className="text-right text-indigo-400">
+                    {investable > 0 ? `$${investable.toLocaleString()}` : '-'}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+      </div>
+      <div className="mt-3 pt-3 border-t border-white/10 flex flex-wrap gap-4 text-xs text-gray-400">
+        <span><span className="text-yellow-400">★</span> = Bonus month</span>
+        <span>Fixed = Rent + Utils (${FIXED_MONTHLY})</span>
+        <span>Investable = Balance over $1,000 buffer</span>
       </div>
     </div>
   );
@@ -177,29 +221,110 @@ function MonthlyTable({ projection }) {
 
 function CustomTooltip({ active, payload, label }) {
   if (active && payload && payload.length) {
+    const data = payload[0].payload;
     return (
-      <div className="glass-card rounded-lg p-3 text-sm">
-        <p className="text-white font-medium mb-1">{label}</p>
-        <p className="text-indigo-400">Balance: ${payload[0].value.toLocaleString()}</p>
+      <div className="glass-card rounded-lg p-3 text-sm border border-white/20">
+        <p className="text-white font-medium mb-2">{label}</p>
+        <div className="space-y-1 text-xs">
+          <p className="text-emerald-400">Income: ${data.income?.toLocaleString()}</p>
+          <p className="text-red-400">Expenses: ${data.expenses?.toLocaleString()}</p>
+          <p className={data.net >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+            Net: {data.net >= 0 ? '+' : ''}${data.net?.toLocaleString()}
+          </p>
+          <p className="text-indigo-400 font-medium pt-1 border-t border-white/10">
+            Balance: ${data.balance?.toLocaleString()}
+          </p>
+          {data.hasBonus && (
+            <p className="text-yellow-400">★ Includes bonus!</p>
+          )}
+        </div>
       </div>
     );
   }
   return null;
 }
 
+function SummaryCards({ projection, params }) {
+  const totalIncome = projection.reduce((sum, p) => sum + p.income, 0);
+  const totalExpenses = projection.reduce((sum, p) => sum + p.expenses, 0);
+  const avgMonthlyNet = Math.round((totalIncome - totalExpenses) / 13);
+  const avgWeeklyBudget = Math.round(params.monthlySpend / 4.33);
+  const totalInvestable = projection.reduce((sum, p) => sum + (p.balance > 1000 ? p.balance - 1000 : 0), 0);
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="glass-card rounded-xl p-4 text-center">
+        <div className="text-lg font-bold text-emerald-400">${totalIncome.toLocaleString()}</div>
+        <div className="text-xs text-gray-400">Total Income</div>
+      </div>
+      <div className="glass-card rounded-xl p-4 text-center">
+        <div className="text-lg font-bold text-red-400">${totalExpenses.toLocaleString()}</div>
+        <div className="text-xs text-gray-400">Total Expenses</div>
+      </div>
+      <div className="glass-card rounded-xl p-4 text-center">
+        <div className={`text-lg font-bold ${avgMonthlyNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          ${avgMonthlyNet.toLocaleString()}
+        </div>
+        <div className="text-xs text-gray-400">Avg Monthly Net</div>
+      </div>
+      <div className="glass-card rounded-xl p-4 text-center">
+        <div className="text-lg font-bold text-indigo-400">${avgWeeklyBudget}</div>
+        <div className="text-xs text-gray-400">Weekly Budget</div>
+      </div>
+    </div>
+  );
+}
+
+function IncomeBreakdownChart({ projection, params }) {
+  const data = projection.map(p => ({
+    month: p.month.replace(" '25", ''),
+    paycheck: p.paycheckIncome,
+    bonus: p.bonusIncome,
+    subletter: p.subletterIncome,
+  }));
+
+  return (
+    <div className="glass-card rounded-2xl p-5">
+      <h2 className="font-semibold text-sm mb-3 text-white">Income Sources</h2>
+      <ResponsiveContainer width="100%" height={150}>
+        <ComposedChart data={data}>
+          <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#9ca3af' }} />
+          <YAxis tick={{ fontSize: 9, fill: '#9ca3af' }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
+          <Tooltip
+            contentStyle={{ background: 'rgba(15, 15, 35, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+            labelStyle={{ color: 'white' }}
+          />
+          <Bar dataKey="paycheck" stackId="a" fill="#22c55e" name="Paycheck" />
+          <Bar dataKey="bonus" stackId="a" fill="#eab308" name="Bonus" />
+          <Bar dataKey="subletter" stackId="a" fill="#6366f1" name="Subletter" />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <div className="flex justify-center gap-4 mt-2 text-xs">
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500"></span> Paycheck</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-500"></span> Bonus</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-indigo-500"></span> Subletter</span>
+      </div>
+    </div>
+  );
+}
+
 export default function YearlyProjection() {
   const [params, setParams] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const data = JSON.parse(saved);
-      return data.params || {
-        startingCash: 1500,
-        monthlySpend: 6400,
-        bonus: 12000,
-        bonusMonth: 'Jan',
-        subletterMonths: ['Feb'],
-        subletterAmount: 2000,
-      };
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        return data.params || {
+          startingCash: 1500,
+          monthlySpend: 6400,
+          bonus: 12000,
+          bonusMonth: 'Jan',
+          subletterMonths: ['Feb'],
+          subletterAmount: 2000,
+        };
+      }
+    } catch (e) {
+      console.error('Error loading params:', e);
     }
     return {
       startingCash: 1500,
@@ -212,17 +337,24 @@ export default function YearlyProjection() {
   });
 
   const [expenses, setExpenses] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const data = JSON.parse(saved);
-      return data.expenses || DEFAULT_ONE_TIME_EXPENSES;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        return data.expenses || DEFAULT_ONE_TIME_EXPENSES;
+      }
+    } catch (e) {
+      console.error('Error loading expenses:', e);
     }
     return DEFAULT_ONE_TIME_EXPENSES;
   });
 
-  // Save to localStorage whenever state changes
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ params, expenses }));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ params, expenses }));
+    } catch (e) {
+      console.error('Error saving:', e);
+    }
   }, [params, expenses]);
 
   const handleParamChange = (key, value) => {
@@ -275,7 +407,11 @@ export default function YearlyProjection() {
         balance: Math.round(balance),
         income: Math.round(totalIncome),
         expenses: Math.round(totalExpenses),
-        net: Math.round(net)
+        net: Math.round(net),
+        paycheckIncome: Math.round(paycheckIncome),
+        bonusIncome: Math.round(bonusIncome),
+        subletterIncome: Math.round(subletterIncome),
+        hasBonus: bonusIncome > 0,
       });
     }
     return data;
@@ -293,9 +429,12 @@ export default function YearlyProjection() {
           <div className={`text-2xl font-bold ${endBalance >= 0 ? 'gradient-text' : 'gradient-text-red'}`}>
             ${endBalance.toLocaleString()}
           </div>
-          <div className="text-xs text-gray-500">Dec '26 balance</div>
+          <div className="text-xs text-gray-400">Dec '26 balance</div>
         </div>
       </div>
+
+      {/* Summary Cards */}
+      <SummaryCards projection={projection} params={params} />
 
       {/* Warning */}
       {lowestPoint < 0 && (
@@ -304,10 +443,21 @@ export default function YearlyProjection() {
         </div>
       )}
 
-      {/* Chart */}
+      {/* Main Chart */}
       <div className="glass-card rounded-2xl p-5">
-        <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={projection}>
+        <h2 className="font-semibold text-sm mb-3 text-white">Balance Over Time</h2>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={projection}>
+            <defs>
+              <linearGradient id="balanceGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+              </linearGradient>
+              <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#6366f1" />
+                <stop offset="100%" stopColor="#a855f7" />
+              </linearGradient>
+            </defs>
             <XAxis
               dataKey="month"
               tick={{ fontSize: 10, fill: '#9ca3af' }}
@@ -321,24 +471,43 @@ export default function YearlyProjection() {
               tickLine={{ stroke: 'rgba(255,255,255,0.1)' }}
             />
             <Tooltip content={<CustomTooltip />} />
-            <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} />
+            <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: 'Zero', fill: '#ef4444', fontSize: 10 }} />
+            <ReferenceLine y={1000} stroke="#22c55e" strokeDasharray="3 3" strokeOpacity={0.3} label={{ value: 'Buffer', fill: '#22c55e', fontSize: 10 }} />
+            <Area
+              type="monotone"
+              dataKey="balance"
+              stroke="none"
+              fill="url(#balanceGradient)"
+            />
             <Line
               type="monotone"
               dataKey="balance"
               stroke="url(#lineGradient)"
               strokeWidth={3}
-              dot={{ r: 3, fill: '#6366f1', strokeWidth: 0 }}
-              activeDot={{ r: 5, fill: '#818cf8', strokeWidth: 0 }}
+              dot={(props) => {
+                const { cx, cy, payload } = props;
+                if (payload.hasBonus) {
+                  return (
+                    <g>
+                      <circle cx={cx} cy={cy} r={6} fill="#eab308" stroke="#fef08a" strokeWidth={2} />
+                    </g>
+                  );
+                }
+                return <circle cx={cx} cy={cy} r={3} fill="#6366f1" />;
+              }}
+              activeDot={{ r: 6, fill: '#818cf8', strokeWidth: 0 }}
             />
-            <defs>
-              <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#6366f1" />
-                <stop offset="100%" stopColor="#a855f7" />
-              </linearGradient>
-            </defs>
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
+        <div className="flex justify-center gap-4 mt-2 text-xs text-gray-400">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-500"></span> Bonus month</span>
+          <span className="flex items-center gap-1"><span className="w-8 h-0.5 bg-red-500"></span> Zero line</span>
+          <span className="flex items-center gap-1"><span className="w-8 h-0.5 bg-emerald-500 opacity-50"></span> $1k buffer</span>
+        </div>
       </div>
+
+      {/* Income Breakdown Chart */}
+      <IncomeBreakdownChart projection={projection} params={params} />
 
       {/* Parameters and Expenses */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -352,11 +521,19 @@ export default function YearlyProjection() {
       </div>
 
       {/* Monthly Table */}
-      <MonthlyTable projection={projection} />
+      <MonthlyTable projection={projection} bonusMonth={params.bonusMonth} params={params} />
+
+      {/* Investment Tip */}
+      {endBalance > 5000 && (
+        <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4 text-indigo-300 text-sm">
+          <span className="font-semibold">Investment Opportunity:</span> With a projected end balance of ${endBalance.toLocaleString()},
+          consider investing surplus above your $1,000 buffer in a high-yield savings account or index funds.
+        </div>
+      )}
 
       {/* Auto-save indicator */}
-      <div className="text-center text-xs text-gray-600">
-        Changes are automatically saved to your browser
+      <div className="text-center text-xs text-gray-500">
+        Changes auto-saved to browser • Future: Upload bank statements for spending analysis
       </div>
     </div>
   );
