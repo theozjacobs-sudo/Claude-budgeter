@@ -466,7 +466,104 @@ function TransactionList({ transactions, onUpdateCategory, onDelete }) {
   );
 }
 
-function SpendingChart({ transactions }) {
+// Helper to extract month key from date string (MM/DD or MM/DD/YYYY)
+function getMonthKey(dateStr) {
+  if (!dateStr) return 'Unknown';
+  const parts = dateStr.split('/');
+  if (parts.length >= 2) {
+    const month = parseInt(parts[0], 10);
+    const year = parts.length >= 3 ? parts[2] : new Date().getFullYear().toString().slice(-2);
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${monthNames[month - 1]} '${year.slice(-2)}`;
+  }
+  return 'Unknown';
+}
+
+// Get unique months from transactions
+function getUniqueMonths(transactions) {
+  const months = new Set();
+  transactions.forEach(t => {
+    months.add(getMonthKey(t.date));
+  });
+  return Array.from(months).sort((a, b) => {
+    // Sort by date (most recent first)
+    const [aMonth, aYear] = a.split(" '");
+    const [bMonth, bYear] = b.split(" '");
+    const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (aYear !== bYear) return parseInt(bYear) - parseInt(aYear);
+    return monthOrder.indexOf(bMonth) - monthOrder.indexOf(aMonth);
+  });
+}
+
+// Monthly spending bar chart component
+function MonthlySpendingChart({ transactions }) {
+  const monthlyData = useMemo(() => {
+    const byMonth = {};
+    transactions
+      .filter(t => t.amount < 0)
+      .forEach(t => {
+        const month = getMonthKey(t.date);
+        if (!byMonth[month]) {
+          byMonth[month] = { month, total: 0, categories: {} };
+        }
+        byMonth[month].total += Math.abs(t.amount);
+        byMonth[month].categories[t.category] = (byMonth[month].categories[t.category] || 0) + Math.abs(t.amount);
+      });
+
+    return Object.values(byMonth)
+      .map(m => ({
+        name: m.month,
+        total: Math.round(m.total),
+        ...Object.fromEntries(
+          Object.entries(m.categories).map(([k, v]) => [k, Math.round(v)])
+        )
+      }))
+      .sort((a, b) => {
+        const [aMonth, aYear] = a.name.split(" '");
+        const [bMonth, bYear] = b.name.split(" '");
+        const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        if (aYear !== bYear) return parseInt(aYear) - parseInt(bYear);
+        return monthOrder.indexOf(aMonth) - monthOrder.indexOf(bMonth);
+      });
+  }, [transactions]);
+
+  if (monthlyData.length === 0) return null;
+
+  const categories = Object.keys(CATEGORY_COLORS).filter(c => c !== 'Other');
+
+  return (
+    <div className="glass-card rounded-2xl p-5">
+      <h3 className="font-semibold text-white mb-4">Monthly Variable Spending</h3>
+      <p className="text-xs text-gray-500 mb-3">Excludes fixed expenses (rent, utilities, etc.)</p>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={monthlyData}>
+          <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 12 }} />
+          <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} tickFormatter={v => `$${v}`} />
+          <Tooltip
+            contentStyle={{ background: 'rgba(15, 15, 35, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+            formatter={(value, name) => [`$${value}`, name]}
+            labelStyle={{ color: 'white' }}
+            itemStyle={{ color: '#e5e7eb' }}
+          />
+          {categories.map(cat => (
+            <Bar key={cat} dataKey={cat} stackId="a" fill={CATEGORY_COLORS[cat]} />
+          ))}
+          <Bar dataKey="Other" stackId="a" fill={CATEGORY_COLORS['Other']} />
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="flex flex-wrap gap-2 mt-3 justify-center">
+        {categories.slice(0, 6).map(cat => (
+          <div key={cat} className="flex items-center gap-1.5 text-xs">
+            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[cat] }} />
+            <span className="text-gray-400">{cat}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SpendingChart({ transactions, selectedMonth }) {
   const categoryTotals = useMemo(() => {
     const totals = {};
     transactions
@@ -492,7 +589,9 @@ function SpendingChart({ transactions }) {
 
   return (
     <div className="glass-card rounded-2xl p-5">
-      <h3 className="font-semibold text-white mb-4">Spending by Category</h3>
+      <h3 className="font-semibold text-white mb-4">
+        Spending by Category {selectedMonth && selectedMonth !== 'all' && <span className="text-indigo-400">- {selectedMonth}</span>}
+      </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ResponsiveContainer width="100%" height={200}>
           <PieChart>
@@ -871,6 +970,17 @@ export default function BankStatements() {
     }
   });
 
+  const [selectedMonth, setSelectedMonth] = useState('all');
+
+  // Get unique months for filter dropdown
+  const availableMonths = useMemo(() => getUniqueMonths(transactions), [transactions]);
+
+  // Filter transactions by selected month
+  const filteredTransactions = useMemo(() => {
+    if (selectedMonth === 'all') return transactions;
+    return transactions.filter(t => getMonthKey(t.date) === selectedMonth);
+  }, [transactions, selectedMonth]);
+
   // Save fixed expenses to localStorage
   useEffect(() => {
     localStorage.setItem(FIXED_EXPENSES_KEY, JSON.stringify(fixedExpenses));
@@ -914,16 +1024,30 @@ export default function BankStatements() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-2">
         <h1 className="text-xl font-bold text-white">Bank Statement Analysis</h1>
-        {transactions.length > 0 && (
-          <button
-            onClick={handleClearAll}
-            className="text-xs text-red-400 hover:text-red-300 px-3 py-1 rounded-lg hover:bg-red-500/10"
-          >
-            Clear All
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {availableMonths.length > 1 && (
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="rounded-xl px-3 py-1.5 text-sm"
+            >
+              <option value="all">All Months</option>
+              {availableMonths.map(month => (
+                <option key={month} value={month}>{month}</option>
+              ))}
+            </select>
+          )}
+          {transactions.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              className="text-xs text-red-400 hover:text-red-300 px-3 py-1 rounded-lg hover:bg-red-500/10"
+            >
+              Clear All
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Fixed Expenses Section */}
@@ -933,11 +1057,15 @@ export default function BankStatements() {
 
       {transactions.length > 0 && (
         <>
-          <SpendingInsights transactions={transactions} />
-          <TopSpendingWarnings transactions={transactions} />
-          <SpendingChart transactions={transactions} />
+          {/* Monthly spending overview bar chart - shows all months */}
+          <MonthlySpendingChart transactions={transactions} />
+
+          {/* Show insights for filtered month */}
+          <SpendingInsights transactions={filteredTransactions} />
+          <TopSpendingWarnings transactions={filteredTransactions} />
+          <SpendingChart transactions={filteredTransactions} selectedMonth={selectedMonth} />
           <TransactionList
-            transactions={transactions}
+            transactions={filteredTransactions}
             onUpdateCategory={handleUpdateCategory}
             onDelete={handleDelete}
           />
