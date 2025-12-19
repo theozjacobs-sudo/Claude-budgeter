@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set worker source for PDF.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Set worker source for PDF.js - use unpkg which is more reliable
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const STORAGE_KEY = 'budget-planner-transactions';
 const FIXED_EXPENSES_KEY = 'budget-planner-fixed-expenses';
@@ -207,96 +207,118 @@ async function parsePDF(arrayBuffer) {
 
   try {
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let fullText = '';
 
-    // Extract text from all pages
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
+    // Extract text with position info for better parsing
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
-      const pageText = textContent.items.map(item => item.str).join(' ');
-      fullText += pageText + '\n';
-    }
 
-    // Parse Chase Freedom style format
-    // Pattern: MM/DD MERCHANT_NAME [location] [currency info] AMOUNT
-    const lines = fullText.split('\n');
-
-    // Regex for Chase format: date, then description, then amount at end
-    const transactionRegex = /(\d{1,2}\/\d{1,2})\s+(.+?)\s+(-?[\d,]+\.\d{2})(?:\s|$)/g;
-
-    for (const line of lines) {
-      let match;
-      while ((match = transactionRegex.exec(line)) !== null) {
-        const [, date, rawDescription, amountStr] = match;
-
-        // Clean up description - remove currency conversion info
-        let description = rawDescription
-          .replace(/\d{1,2}\/\d{1,2}\s+EURO.*$/i, '') // Remove "09/24 EURO ..." suffix
-          .replace(/[\d.,]+\s*X\s*[\d.]+\s*\(EXCHG RATE\)/gi, '') // Remove exchange rate info
-          .trim();
-
-        // Skip if description is empty or looks like a header
-        if (!description || description.length < 3) continue;
-        if (/^(PURCHASE|PAYMENT|CREDIT|DATE|AMOUNT|TRANSACTION)/i.test(description)) continue;
-
-        const amount = parseFloat(amountStr.replace(',', ''));
-        if (isNaN(amount) || amount === 0) continue;
-
-        transactions.push({
-          id: Date.now() + transactions.length + Math.random(),
-          date: date,
-          description: description,
-          amount: -Math.abs(amount), // Purchases are expenses (negative)
-          category: categorizeTransaction(description),
+      // Group text items by approximate Y position (same line)
+      const lineMap = new Map();
+      textContent.items.forEach(item => {
+        // Round Y to group items on same line (within 5 units)
+        const y = Math.round(item.transform[5] / 5) * 5;
+        if (!lineMap.has(y)) {
+          lineMap.set(y, []);
+        }
+        lineMap.get(y).push({
+          text: item.str,
+          x: item.transform[4]
         });
-      }
-    }
+      });
 
-    // Also try line-by-line parsing for multi-line entries
-    const dateLineRegex = /^(\d{1,2}\/\d{1,2})\s+([A-Z][\w\s\*\'&.-]+)/;
-    const amountRegex = /(-?[\d,]+\.\d{2})$/;
+      // Sort lines by Y (top to bottom = descending Y)
+      const sortedLines = Array.from(lineMap.entries())
+        .sort((a, b) => b[0] - a[0])
+        .map(([y, items]) => {
+          // Sort items on each line by X position (left to right)
+          return items.sort((a, b) => a.x - b.x).map(i => i.text).join(' ');
+        });
 
-    let currentDate = null;
-    let currentDesc = '';
+      // Parse each line for transactions
+      for (const line of sortedLines) {
+        // Skip empty lines or headers
+        if (!line.trim()) continue;
+        if (/ACCOUNT ACTIVITY|PAYMENTS AND OTHER|PURCHASE|Date of|Transaction|Merchant Name/i.test(line)) continue;
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
+        // Chase format: MM/DD DESCRIPTION AMOUNT
+        // Amount is typically at the end, could be negative or have comma
+        const match = line.match(/^(\d{1,2}\/\d{1,2})\s+(.+?)\s+([-]?[\d,]+\.\d{2})$/);
+        if (match) {
+          const [, date, rawDesc, amountStr] = match;
 
-      // Check if line starts with a date
-      const dateMatch = trimmed.match(dateLineRegex);
-      if (dateMatch) {
-        currentDate = dateMatch[1];
-        currentDesc = dateMatch[2].trim();
+          // Clean description
+          let description = rawDesc
+            .replace(/\d{1,2}\/\d{1,2}\s+EURO\s+[\d.,]+\s*X\s*[\d.]+\s*\(EXCHG RATE\)/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim();
 
-        // Check if amount is on same line
-        const amountMatch = trimmed.match(amountRegex);
-        if (amountMatch && currentDesc) {
-          const amount = parseFloat(amountMatch[1].replace(',', ''));
-          // Remove amount from description
-          const cleanDesc = currentDesc.replace(amountRegex, '').trim();
-          if (cleanDesc.length > 2 && !isNaN(amount) && amount !== 0) {
-            // Check if we already have this transaction
-            const exists = transactions.some(t =>
-              t.date === currentDate &&
-              t.description.toLowerCase().includes(cleanDesc.toLowerCase().slice(0, 10))
-            );
-            if (!exists) {
-              transactions.push({
-                id: Date.now() + transactions.length + Math.random(),
-                date: currentDate,
-                description: cleanDesc,
-                amount: -Math.abs(amount),
-                category: categorizeTransaction(cleanDesc),
-              });
-            }
+          if (description.length < 3) continue;
+
+          const amount = parseFloat(amountStr.replace(',', ''));
+          if (isNaN(amount) || amount === 0) continue;
+
+          // Check for duplicate
+          const exists = transactions.some(t =>
+            t.date === date && t.description === description
+          );
+
+          if (!exists) {
+            transactions.push({
+              id: Date.now() + Math.random(),
+              date,
+              description,
+              amount: -Math.abs(amount), // Purchases are expenses
+              category: categorizeTransaction(description),
+            });
           }
         }
       }
     }
 
+    // If no transactions found, try simpler text extraction
+    if (transactions.length === 0) {
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+      }
+
+      // Try to find patterns like: 09/23 MERCHANT NAME 20.07
+      const regex = /(\d{1,2}\/\d{1,2})\s+([A-Z][A-Z0-9\s\*\'\.\-&]+?)\s+([\d,]+\.\d{2})/g;
+      let match;
+      while ((match = regex.exec(fullText)) !== null) {
+        const [, date, rawDesc, amountStr] = match;
+        const description = rawDesc.trim();
+
+        if (description.length < 3) continue;
+        if (/^(PURCHASE|PAYMENT|CREDIT|ACCOUNT)/i.test(description)) continue;
+
+        const amount = parseFloat(amountStr.replace(',', ''));
+        if (isNaN(amount) || amount === 0) continue;
+
+        const exists = transactions.some(t =>
+          t.date === date && Math.abs(Math.abs(t.amount) - amount) < 0.01
+        );
+
+        if (!exists) {
+          transactions.push({
+            id: Date.now() + Math.random(),
+            date,
+            description,
+            amount: -Math.abs(amount),
+            category: categorizeTransaction(description),
+          });
+        }
+      }
+    }
+
+    console.log(`PDF parsed: found ${transactions.length} transactions`);
+
   } catch (error) {
     console.error('PDF parsing error:', error);
+    alert('Error parsing PDF: ' + error.message + '\n\nTry downloading your statement as CSV instead.');
   }
 
   return transactions;
