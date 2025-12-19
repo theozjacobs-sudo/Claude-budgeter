@@ -423,83 +423,127 @@ async function parsePDF(arrayBuffer) {
   return transactions;
 }
 
-function FileUpload({ onUpload }) {
+function FileUpload({ onUpload, monthlyStats }) {
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [fileCount, setFileCount] = useState(0);
 
-  const handleFile = async (file) => {
-    if (!file) return;
-
-    setLoading(true);
-    try {
+  // Process a single file and return its transactions
+  const processFile = (file) => {
+    return new Promise((resolve) => {
       if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
         const reader = new FileReader();
-        reader.onload = (e) => {
-          const transactions = parseCSV(e.target.result);
-          onUpload(transactions);
-          setLoading(false);
-        };
+        reader.onload = (e) => resolve(parseCSV(e.target.result));
         reader.readAsText(file);
       } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
         const reader = new FileReader();
-        reader.onload = async (e) => {
-          const transactions = await parsePDF(e.target.result);
-          onUpload(transactions);
-          setLoading(false);
-        };
+        reader.onload = async (e) => resolve(await parsePDF(e.target.result));
         reader.readAsArrayBuffer(file);
       } else {
-        alert('Please upload a CSV or PDF file');
-        setLoading(false);
+        resolve([]);
+      }
+    });
+  };
+
+  // Handle multiple files
+  const handleFiles = async (files) => {
+    if (!files || files.length === 0) return;
+
+    setLoading(true);
+    setFileCount(files.length);
+
+    try {
+      const allTransactions = [];
+      for (const file of files) {
+        if (file.name.endsWith('.csv') || file.name.endsWith('.pdf')) {
+          const transactions = await processFile(file);
+          allTransactions.push(...transactions);
+        }
+      }
+
+      if (allTransactions.length > 0) {
+        onUpload(allTransactions);
+      } else {
+        alert('No transactions found in the uploaded files');
       }
     } catch (error) {
       console.error('File processing error:', error);
-      setLoading(false);
     }
+
+    setLoading(false);
+    setFileCount(0);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    handleFile(file);
+    handleFiles(Array.from(e.dataTransfer.files));
   };
 
   const handleChange = (e) => {
-    const file = e.target.files[0];
-    handleFile(file);
+    handleFiles(Array.from(e.target.files));
+    e.target.value = ''; // Reset so same file can be uploaded again
   };
 
+  // Sort months chronologically
+  const sortedMonths = Object.entries(monthlyStats || {}).sort((a, b) => {
+    const [aMonth, aYear] = a[0].split(" '");
+    const [bMonth, bYear] = b[0].split(" '");
+    const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (aYear !== bYear) return parseInt(aYear) - parseInt(bYear);
+    return monthOrder.indexOf(aMonth) - monthOrder.indexOf(bMonth);
+  });
+
   return (
-    <div
-      className={`glass-card rounded-2xl p-8 text-center border-2 border-dashed transition-all ${
-        dragOver ? 'border-indigo-400 bg-indigo-500/10' : 'border-white/20'
-      } ${loading ? 'opacity-70 pointer-events-none' : ''}`}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
-    >
-      <div className="text-4xl mb-4">{loading ? '⏳' : '📄'}</div>
-      <h3 className="text-lg font-semibold text-white mb-2">
-        {loading ? 'Processing...' : 'Upload Bank Statement'}
-      </h3>
-      <p className="text-gray-400 text-sm mb-4">
-        {loading ? 'Parsing your statement' : 'Drag & drop a CSV or PDF file'}
-      </p>
-      {!loading && (
-        <label className="inline-block bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-6 py-2 rounded-xl cursor-pointer hover:shadow-lg hover:scale-105 transition-all">
-          Choose File
-          <input
-            type="file"
-            accept=".csv,.pdf"
-            onChange={handleChange}
-            className="hidden"
-          />
-        </label>
+    <div className="space-y-3">
+      <div
+        className={`glass-card rounded-2xl p-6 text-center border-2 border-dashed transition-all ${
+          dragOver ? 'border-indigo-400 bg-indigo-500/10' : 'border-white/20'
+        } ${loading ? 'opacity-70 pointer-events-none' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        <div className="text-3xl mb-3">{loading ? '⏳' : '📄'}</div>
+        <h3 className="text-lg font-semibold text-white mb-2">
+          {loading ? `Processing ${fileCount} file${fileCount > 1 ? 's' : ''}...` : 'Upload Bank Statements'}
+        </h3>
+        <p className="text-gray-400 text-sm mb-4">
+          {loading ? 'Parsing your statements' : 'Drag & drop CSV or PDF files (multiple supported)'}
+        </p>
+        {!loading && (
+          <label className="inline-block bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-6 py-2 rounded-xl cursor-pointer hover:shadow-lg hover:scale-105 transition-all">
+            Choose Files
+            <input
+              type="file"
+              accept=".csv,.pdf"
+              multiple
+              onChange={handleChange}
+              className="hidden"
+            />
+          </label>
+        )}
+      </div>
+
+      {/* Months Uploaded Tracker */}
+      {sortedMonths.length > 0 && (
+        <div className="glass-card rounded-xl p-4">
+          <h4 className="text-sm font-medium text-gray-400 mb-3">Months Uploaded</h4>
+          <div className="flex flex-wrap gap-2">
+            {sortedMonths.map(([month, stats]) => (
+              <div
+                key={month}
+                className="bg-indigo-500/20 border border-indigo-500/30 rounded-lg px-3 py-1.5"
+              >
+                <span className="text-sm text-indigo-300 font-medium">{month}</span>
+                <span className="text-xs text-gray-400 ml-2">
+                  {stats.count} txns · ${stats.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
-      <p className="text-gray-500 text-xs mt-4">
-        Supports CSV and PDF statements (Chase, Bank of America, Wells Fargo, etc.)
-      </p>
     </div>
   );
 }
@@ -1586,12 +1630,20 @@ export default function BankStatements() {
     }
   };
 
-  // Find duplicate count
+  // Normalize description for duplicate detection
+  const normalizeDesc = (desc) => {
+    return desc.toLowerCase()
+      .replace(/[^a-z0-9]/g, '') // Remove all non-alphanumeric
+      .slice(0, 20); // First 20 chars only
+  };
+
+  // Find duplicate count (fuzzy matching: date + normalized description + amount)
   const duplicateCount = useMemo(() => {
     const seen = new Set();
     let dupes = 0;
     transactions.forEach(t => {
-      const key = `${t.date}|${t.description.toLowerCase()}|${t.amount}`;
+      // Create a fuzzy key: date + first 20 alphanumeric chars of description + amount
+      const key = `${t.date}|${normalizeDesc(t.description)}|${t.amount.toFixed(2)}`;
       if (seen.has(key)) {
         dupes++;
       } else {
@@ -1607,7 +1659,7 @@ export default function BankStatements() {
 
     const seen = new Set();
     const unique = transactions.filter(t => {
-      const key = `${t.date}|${t.description.toLowerCase()}|${t.amount}`;
+      const key = `${t.date}|${normalizeDesc(t.description)}|${t.amount.toFixed(2)}`;
       if (seen.has(key)) {
         return false;
       }
@@ -1618,6 +1670,22 @@ export default function BankStatements() {
     setTransactions(unique);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(unique));
   };
+
+  // Get monthly transaction counts for the upload tracker
+  const monthlyStats = useMemo(() => {
+    const stats = {};
+    transactions.forEach(t => {
+      const month = getMonthKey(t.date);
+      if (!stats[month]) {
+        stats[month] = { count: 0, total: 0 };
+      }
+      stats[month].count++;
+      if (t.amount < 0) {
+        stats[month].total += Math.abs(t.amount);
+      }
+    });
+    return stats;
+  }, [transactions]);
 
   // Re-categorize all transactions using current learned categories
   const handleRefresh = () => {
@@ -1702,7 +1770,7 @@ export default function BankStatements() {
         fixedExpenses={fixedExpenses}
       />
 
-      <FileUpload onUpload={handleUpload} />
+      <FileUpload onUpload={handleUpload} monthlyStats={monthlyStats} />
 
       {transactions.length > 0 && (
         <>
