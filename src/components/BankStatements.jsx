@@ -52,6 +52,9 @@ const CATEGORIES = {
     // Other international
     'brasserie', 'bistro', 'gasthaus', 'cerveceria', 'tapas', 'lido'
   ],
+  'Bikes & Scooters': [
+    'citibike', 'citi bike', 'lime', 'bird', 'spin', 'veo', 'link', 'helbiz', 'revel', 'scoot', 'jump', 'lyft bike', 'uber bike', 'divvy', 'capital bikeshare', 'bluebikes', 'bay wheels'
+  ],
   'Transport': [
     'uber', 'lyft', 'gas', 'shell', 'chevron', 'exxon', 'bp', 'parking', 'transit', 'metro', 'subway', 'bart', 'caltrain', 'amtrak',
     // International
@@ -88,6 +91,7 @@ const CATEGORIES = {
 const CATEGORY_COLORS = {
   'Groceries': '#22c55e',
   'Dining': '#f97316',
+  'Bikes & Scooters': '#10b981',
   'Transport': '#3b82f6',
   'Shopping': '#ec4899',
   'Entertainment': '#8b5cf6',
@@ -646,6 +650,95 @@ function SpendingChart({ transactions, selectedMonth }) {
   );
 }
 
+// Dedicated Bike & Scooter spending tracker
+function BikeScooterTracker({ transactions }) {
+  const bikeData = useMemo(() => {
+    const bikeTransactions = transactions.filter(
+      t => t.amount < 0 && t.category === 'Bikes & Scooters'
+    );
+
+    if (bikeTransactions.length === 0) return null;
+
+    const total = bikeTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const count = bikeTransactions.length;
+    const avgRide = total / count;
+
+    // Group by month
+    const byMonth = {};
+    bikeTransactions.forEach(t => {
+      const month = getMonthKey(t.date);
+      byMonth[month] = (byMonth[month] || 0) + Math.abs(t.amount);
+    });
+
+    const monthlyData = Object.entries(byMonth)
+      .map(([month, amount]) => ({ month, amount: Math.round(amount * 100) / 100 }))
+      .sort((a, b) => {
+        const [aMonth, aYear] = a.month.split(" '");
+        const [bMonth, bYear] = b.month.split(" '");
+        const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        if (aYear !== bYear) return parseInt(aYear) - parseInt(bYear);
+        return monthOrder.indexOf(aMonth) - monthOrder.indexOf(bMonth);
+      });
+
+    return { total, count, avgRide, monthlyData, transactions: bikeTransactions };
+  }, [transactions]);
+
+  if (!bikeData) return null;
+
+  return (
+    <div className="glass-card rounded-2xl p-5 border border-emerald-500/30">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-2xl">🚲</span>
+        <h3 className="font-semibold text-white">Bikes & Scooters</h3>
+        <span className="text-xs text-gray-500 ml-auto">Citibike, Lime, etc.</span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="text-center">
+          <div className="text-xl font-bold text-emerald-400">${bikeData.total.toFixed(0)}</div>
+          <div className="text-xs text-gray-400">Total Spent</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xl font-bold text-emerald-400">{bikeData.count}</div>
+          <div className="text-xs text-gray-400">Rides</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xl font-bold text-emerald-400">${bikeData.avgRide.toFixed(2)}</div>
+          <div className="text-xs text-gray-400">Avg/Ride</div>
+        </div>
+      </div>
+
+      {bikeData.monthlyData.length > 1 && (
+        <ResponsiveContainer width="100%" height={120}>
+          <BarChart data={bikeData.monthlyData}>
+            <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 10 }} />
+            <YAxis tick={{ fill: '#9ca3af', fontSize: 10 }} tickFormatter={v => `$${v}`} />
+            <Tooltip
+              contentStyle={{ background: 'rgba(15, 15, 35, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+              formatter={(value) => [`$${value}`, 'Spent']}
+              labelStyle={{ color: 'white' }}
+              itemStyle={{ color: '#e5e7eb' }}
+            />
+            <Bar dataKey="amount" fill="#10b981" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+
+      <div className="mt-3 space-y-1 max-h-32 overflow-y-auto">
+        {bikeData.transactions.slice(0, 5).map(t => (
+          <div key={t.id} className="flex justify-between text-xs">
+            <span className="text-gray-400">{t.date} - {t.description}</span>
+            <span className="text-emerald-400">${Math.abs(t.amount).toFixed(2)}</span>
+          </div>
+        ))}
+        {bikeData.transactions.length > 5 && (
+          <div className="text-xs text-gray-500">+{bikeData.transactions.length - 5} more rides</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SpendingInsights({ transactions }) {
   const insights = useMemo(() => {
     const expenses = transactions.filter(t => t.amount < 0);
@@ -1060,6 +1153,9 @@ export default function BankStatements() {
           {/* Monthly spending overview bar chart - shows all months */}
           <MonthlySpendingChart transactions={transactions} />
 
+          {/* Bike & Scooter dedicated tracker */}
+          <BikeScooterTracker transactions={transactions} />
+
           {/* Show insights for filtered month */}
           <SpendingInsights transactions={filteredTransactions} />
           <TopSpendingWarnings transactions={filteredTransactions} />
@@ -1069,6 +1165,16 @@ export default function BankStatements() {
             onUpdateCategory={handleUpdateCategory}
             onDelete={handleDelete}
           />
+
+          {/* Clear All Button - prominent at bottom */}
+          <div className="flex justify-center pt-4">
+            <button
+              onClick={handleClearAll}
+              className="bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-500/30 px-6 py-2 rounded-xl transition-all"
+            >
+              Clear All Transactions
+            </button>
+          </div>
         </>
       )}
 

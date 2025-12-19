@@ -275,6 +275,87 @@ function SummaryCards({ projection, params }) {
   );
 }
 
+function BudgetBreakdownCard({ monthlySpend }) {
+  const fixedAmount = FIXED_MONTHLY;
+  const discretionaryAmount = monthlySpend - fixedAmount;
+  const fixedPercent = Math.round((fixedAmount / monthlySpend) * 100);
+  const discretionaryPercent = 100 - fixedPercent;
+  const weeklyDiscretionary = Math.round(discretionaryAmount / 4.33);
+
+  const fixedBreakdown = [
+    { name: 'Rent', amount: 2425 },
+    { name: 'Utilities/Internet/Phone', amount: 150 },
+  ];
+
+  return (
+    <div className="glass-card rounded-2xl p-5">
+      <h2 className="font-semibold text-sm mb-3 text-white">Monthly Budget Breakdown</h2>
+
+      {/* Visual bar */}
+      <div className="h-8 rounded-xl overflow-hidden flex mb-3">
+        <div
+          className="bg-gradient-to-r from-slate-600 to-slate-500 flex items-center justify-center"
+          style={{ width: `${fixedPercent}%` }}
+        >
+          <span className="text-xs font-medium text-white">Fixed ${fixedAmount}</span>
+        </div>
+        <div
+          className="bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center justify-center"
+          style={{ width: `${discretionaryPercent}%` }}
+        >
+          <span className="text-xs font-medium text-white">Discretionary ${discretionaryAmount}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Fixed expenses */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-3 h-3 rounded bg-slate-500"></div>
+            <span className="text-sm font-medium text-gray-300">Fixed ({fixedPercent}%)</span>
+          </div>
+          <div className="space-y-1 text-xs text-gray-400">
+            {fixedBreakdown.map(item => (
+              <div key={item.name} className="flex justify-between">
+                <span>{item.name}</span>
+                <span className="text-gray-300">${item.amount}</span>
+              </div>
+            ))}
+            <div className="pt-1 border-t border-white/10 flex justify-between font-medium text-gray-300">
+              <span>Total</span>
+              <span>${fixedAmount}</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Must pay every month
+          </p>
+        </div>
+
+        {/* Discretionary */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-3 h-3 rounded bg-indigo-500"></div>
+            <span className="text-sm font-medium text-gray-300">Discretionary ({discretionaryPercent}%)</span>
+          </div>
+          <div className="space-y-2">
+            <div className="text-center p-3 bg-indigo-500/10 rounded-xl">
+              <div className="text-2xl font-bold text-indigo-400">${discretionaryAmount}</div>
+              <div className="text-xs text-gray-400">per month</div>
+            </div>
+            <div className="text-center p-3 bg-purple-500/10 rounded-xl">
+              <div className="text-xl font-bold text-purple-400">${weeklyDiscretionary}</div>
+              <div className="text-xs text-gray-400">per week</div>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Groceries, dining, shopping, etc.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function IncomeBreakdownChart({ projection, params }) {
   const data = projection.map(p => ({
     month: p.month.replace(" '25", ''),
@@ -436,6 +517,9 @@ export default function YearlyProjection() {
 
       {/* Summary Cards */}
       <SummaryCards projection={projection} params={params} />
+
+      {/* Budget Breakdown - Fixed vs Discretionary */}
+      <BudgetBreakdownCard monthlySpend={params.monthlySpend} />
 
       {/* Warning */}
       {lowestPoint < 0 && (
