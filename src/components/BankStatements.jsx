@@ -85,6 +85,10 @@ const CATEGORIES = {
     // Travel sites
     'kayak', 'skyscanner', 'tripadvisor', 'hotels.com', 'ryanair', 'easyjet', 'lufthansa', 'alitalia'
   ],
+  // Credit card payments - not actual expenses, just paying off the card
+  'Payment': [
+    'payment thank you', 'payment - thank you', 'autopay', 'auto pay', 'automatic payment', 'balance payment'
+  ],
   'Other': []
 };
 
@@ -100,8 +104,12 @@ const CATEGORY_COLORS = {
   'Subscriptions': '#6366f1',
   'Bars': '#eab308',
   'Travel': '#06b6d4',
+  'Payment': '#4ade80', // Green for payments (money going out to pay debt)
   'Other': '#9ca3af',
 };
+
+// Categories to exclude from expense calculations (not real spending)
+const EXCLUDED_FROM_EXPENSES = ['Payment'];
 
 function categorizeTransaction(description) {
   const lower = description.toLowerCase().trim();
@@ -412,7 +420,7 @@ function TransactionList({ transactions, onUpdateCategory, onDelete }) {
     ? transactions
     : transactions.filter(t => t.category === filter);
 
-  const expenses = filtered.filter(t => t.amount < 0);
+  const expenses = filtered.filter(t => t.amount < 0 && !EXCLUDED_FROM_EXPENSES.includes(t.category));
 
   // Open Google search or Maps for a merchant
   const lookupMerchant = (description) => {
@@ -526,7 +534,7 @@ function MonthlySpendingChart({ transactions }) {
   const monthlyData = useMemo(() => {
     const byMonth = {};
     transactions
-      .filter(t => t.amount < 0)
+      .filter(t => t.amount < 0 && !EXCLUDED_FROM_EXPENSES.includes(t.category))
       .forEach(t => {
         const month = getMonthKey(t.date);
         if (!byMonth[month]) {
@@ -593,7 +601,7 @@ function SpendingChart({ transactions, selectedMonth }) {
   const categoryTotals = useMemo(() => {
     const totals = {};
     transactions
-      .filter(t => t.amount < 0)
+      .filter(t => t.amount < 0 && !EXCLUDED_FROM_EXPENSES.includes(t.category))
       .forEach(t => {
         totals[t.category] = (totals[t.category] || 0) + Math.abs(t.amount);
       });
@@ -763,7 +771,7 @@ function BikeScooterTracker({ transactions }) {
 
 function SpendingInsights({ transactions }) {
   const insights = useMemo(() => {
-    const expenses = transactions.filter(t => t.amount < 0);
+    const expenses = transactions.filter(t => t.amount < 0 && !EXCLUDED_FROM_EXPENSES.includes(t.category));
     if (expenses.length === 0) return null;
 
     const total = expenses.reduce((sum, t) => sum + Math.abs(t.amount), 0);
@@ -1019,7 +1027,7 @@ function TopSpendingWarnings({ transactions, monthlyBudget = 6400 }) {
   const categoryTotals = useMemo(() => {
     const totals = {};
     transactions
-      .filter(t => t.amount < 0)
+      .filter(t => t.amount < 0 && !EXCLUDED_FROM_EXPENSES.includes(t.category))
       .forEach(t => {
         totals[t.category] = (totals[t.category] || 0) + Math.abs(t.amount);
       });
@@ -1112,11 +1120,23 @@ export default function BankStatements() {
   const handleUpdateCategory = (id, category) => {
     setTransactions(prev => {
       const transaction = prev.find(t => t.id === id);
+      if (!transaction) return prev;
+
       // Learn this categorization for future uploads
-      if (transaction) {
-        learnCategory(transaction.description, category);
-      }
-      const updated = prev.map(t => t.id === id ? { ...t, category } : t);
+      learnCategory(transaction.description, category);
+
+      // Update this transaction AND all others with matching merchant name
+      const descLower = transaction.description.toLowerCase().trim();
+      const updated = prev.map(t => {
+        // Update the clicked transaction
+        if (t.id === id) return { ...t, category };
+        // Also update other transactions with the same merchant (case-insensitive)
+        if (t.description.toLowerCase().trim() === descLower) {
+          return { ...t, category };
+        }
+        return t;
+      });
+
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
