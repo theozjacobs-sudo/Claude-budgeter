@@ -9,13 +9,13 @@ const STORAGE_KEY = 'budget-planner-transactions';
 const FIXED_EXPENSES_KEY = 'budget-planner-fixed-expenses';
 const LEARNED_CATEGORIES_KEY = 'budget-planner-learned-categories';
 
-// Default fixed expenses
+// Default fixed expenses - distinct colors for better visibility
 const DEFAULT_FIXED_EXPENSES = [
-  { id: 1, name: 'Rent', amount: 2425, color: '#6366f1' },
-  { id: 2, name: 'Utilities', amount: 200, color: '#8b5cf6' },
-  { id: 3, name: 'Internet', amount: 60, color: '#a855f7' },
-  { id: 4, name: 'Phone', amount: 45, color: '#d946ef' },
-  { id: 5, name: 'Insurance', amount: 150, color: '#ec4899' },
+  { id: 1, name: 'Rent', amount: 2425, color: '#6366f1' },       // Indigo
+  { id: 2, name: 'Utilities', amount: 80, color: '#f59e0b' },    // Amber
+  { id: 3, name: 'Internet', amount: 20, color: '#10b981' },     // Emerald
+  { id: 4, name: 'Phone', amount: 45, color: '#3b82f6' },        // Blue
+  { id: 5, name: 'Insurance', amount: 150, color: '#ef4444' },   // Red
 ];
 
 // Load learned categories from localStorage
@@ -926,16 +926,11 @@ function SpendingInsights({ transactions }) {
   );
 }
 
-function FixedExpensesSection({ expenses, onUpdate }) {
+function FixedExpensesSection({ expenses, onUpdate, discretionarySpending = 0 }) {
   const totalFixed = expenses.reduce((sum, e) => sum + e.amount, 0);
   const [editing, setEditing] = useState(false);
   const [newExpense, setNewExpense] = useState({ name: '', amount: '' });
-
-  const chartData = expenses.map(e => ({
-    name: e.name,
-    value: e.amount,
-    color: e.color,
-  }));
+  const monthlyBudget = 6400;
 
   const handleAmountChange = (id, value) => {
     const num = parseFloat(value) || 0;
@@ -944,7 +939,7 @@ function FixedExpensesSection({ expenses, onUpdate }) {
 
   const handleAddExpense = () => {
     if (newExpense.name && newExpense.amount) {
-      const colors = ['#f97316', '#22c55e', '#3b82f6', '#eab308', '#06b6d4'];
+      const colors = ['#f97316', '#22c55e', '#3b82f6', '#eab308', '#06b6d4', '#ec4899'];
       onUpdate([
         ...expenses,
         {
@@ -962,113 +957,153 @@ function FixedExpensesSection({ expenses, onUpdate }) {
     onUpdate(expenses.filter(e => e.id !== id));
   };
 
+  // Data for Fixed vs Discretionary comparison
+  const comparisonData = [
+    { name: 'Fixed', amount: totalFixed, color: '#6366f1' },
+    { name: 'Discretionary', amount: discretionarySpending || (monthlyBudget - totalFixed), color: '#f97316' },
+  ];
+
+  const totalSpent = totalFixed + (discretionarySpending || 0);
+  const fixedPercent = discretionarySpending > 0 ? Math.round((totalFixed / totalSpent) * 100) : Math.round((totalFixed / monthlyBudget) * 100);
+
   return (
     <div className="glass-card rounded-2xl p-5">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold text-white">Monthly Fixed Expenses</h3>
+        <h3 className="font-semibold text-white">Fixed vs Discretionary Spending</h3>
         <button
           onClick={() => setEditing(!editing)}
           className="text-xs text-indigo-400 hover:text-indigo-300 px-2 py-1 rounded-lg hover:bg-indigo-500/10"
         >
-          {editing ? 'Done' : 'Edit'}
+          {editing ? 'Done' : 'Edit Fixed'}
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Stacked bar visualization */}
-        <div>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={[{ name: 'Fixed', ...Object.fromEntries(expenses.map(e => [e.name, e.amount])) }]} layout="vertical">
-              <XAxis type="number" hide />
-              <YAxis type="category" dataKey="name" hide />
+      {/* Fixed vs Discretionary Bar Chart */}
+      <div className="mb-6">
+        <ResponsiveContainer width="100%" height={100}>
+          <BarChart data={comparisonData} layout="vertical" barSize={35}>
+            <XAxis type="number" hide />
+            <YAxis type="category" dataKey="name" hide />
+            <Tooltip
+              contentStyle={{ background: 'rgba(15, 15, 35, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+              formatter={(value) => [`$${value.toLocaleString()}`, '']}
+              labelStyle={{ color: 'white' }}
+            />
+            <Bar dataKey="amount" radius={[4, 4, 4, 4]}>
+              {comparisonData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+
+        {/* Legend & Totals */}
+        <div className="flex justify-around mt-2">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <div className="w-3 h-3 rounded-full bg-indigo-500" />
+              <span className="text-sm text-gray-300">Fixed</span>
+            </div>
+            <div className="text-lg font-bold text-indigo-400">${totalFixed.toLocaleString()}</div>
+            <div className="text-xs text-gray-500">{fixedPercent}% of {discretionarySpending > 0 ? 'spending' : 'budget'}</div>
+          </div>
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <div className="w-3 h-3 rounded-full bg-orange-500" />
+              <span className="text-sm text-gray-300">Discretionary</span>
+            </div>
+            <div className="text-lg font-bold text-orange-400">
+              ${(discretionarySpending || (monthlyBudget - totalFixed)).toLocaleString()}
+            </div>
+            <div className="text-xs text-gray-500">{100 - fixedPercent}% of {discretionarySpending > 0 ? 'spending' : 'budget'}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fixed Expenses Breakdown */}
+      <div className="border-t border-white/10 pt-4">
+        <h4 className="text-sm font-medium text-gray-400 mb-3">Fixed Expenses Breakdown</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Pie Chart */}
+          <ResponsiveContainer width="100%" height={150}>
+            <PieChart>
+              <Pie
+                data={expenses.map(e => ({ name: e.name, value: e.amount, color: e.color }))}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={35}
+                outerRadius={60}
+                paddingAngle={2}
+              >
+                {expenses.map((e, index) => (
+                  <Cell key={`cell-${index}`} fill={e.color} />
+                ))}
+              </Pie>
               <Tooltip
                 contentStyle={{ background: 'rgba(15, 15, 35, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
                 formatter={(value) => [`$${value}`, '']}
-                labelStyle={{ color: 'white' }}
-                itemStyle={{ color: '#e5e7eb' }}
               />
-              {expenses.map((expense) => (
-                <Bar key={expense.id} dataKey={expense.name} stackId="a" fill={expense.color} />
-              ))}
-            </BarChart>
+            </PieChart>
           </ResponsiveContainer>
 
-          {/* Breakdown below chart */}
-          <div className="flex flex-wrap gap-2 mt-2 justify-center">
+          {/* Expense list */}
+          <div className="space-y-2">
             {expenses.map(e => (
-              <div key={e.id} className="flex items-center gap-1.5 text-xs">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: e.color }} />
-                <span className="text-gray-400">{e.name}</span>
+              <div key={e.id} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
+                <span className="flex-1 text-sm text-gray-300">{e.name}</span>
+                {editing ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">$</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={e.amount}
+                      onChange={(ev) => handleAmountChange(e.id, ev.target.value)}
+                      className="w-16 rounded-lg px-2 py-1 text-sm text-right"
+                    />
+                    <button
+                      onClick={() => handleRemove(e.id)}
+                      className="text-red-400 hover:text-red-300 ml-1"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-sm font-medium text-white">${e.amount}</span>
+                )}
               </div>
             ))}
-          </div>
-        </div>
 
-        {/* Expense list */}
-        <div className="space-y-2">
-          {expenses.map(e => (
-            <div key={e.id} className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
-              <span className="flex-1 text-sm text-gray-300">{e.name}</span>
-              {editing ? (
-                <div className="flex items-center gap-1">
-                  <span className="text-gray-500">$</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={e.amount}
-                    onChange={(ev) => handleAmountChange(e.id, ev.target.value)}
-                    className="w-20 rounded-lg px-2 py-1 text-sm text-right"
-                  />
-                  <button
-                    onClick={() => handleRemove(e.id)}
-                    className="text-red-400 hover:text-red-300 ml-1"
-                  >
-                    ×
-                  </button>
-                </div>
-              ) : (
-                <span className="text-sm font-medium text-white">${e.amount}</span>
-              )}
-            </div>
-          ))}
-
-          {/* Add new expense */}
-          {editing && (
-            <div className="flex items-center gap-2 pt-2 border-t border-white/10 mt-2">
-              <input
-                type="text"
-                placeholder="Name"
-                value={newExpense.name}
-                onChange={(ev) => setNewExpense(p => ({ ...p, name: ev.target.value }))}
-                className="flex-1 rounded-lg px-2 py-1 text-sm"
-              />
-              <span className="text-gray-500">$</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="0"
-                value={newExpense.amount}
-                onChange={(ev) => setNewExpense(p => ({ ...p, amount: ev.target.value }))}
-                className="w-16 rounded-lg px-2 py-1 text-sm text-right"
-              />
-              <button
-                onClick={handleAddExpense}
-                className="bg-indigo-500 text-white px-2 py-1 rounded-lg text-sm hover:bg-indigo-400"
-              >
-                +
-              </button>
-            </div>
-          )}
-
-          {/* Total */}
-          <div className="flex items-center justify-between pt-3 border-t border-white/10 mt-3">
-            <span className="font-medium text-white">Total Fixed</span>
-            <span className="text-xl font-bold text-indigo-400">${totalFixed.toLocaleString()}</span>
-          </div>
-
-          <div className="text-xs text-gray-500">
-            Variable budget remaining: ${(6400 - totalFixed).toLocaleString()}/month
+            {/* Add new expense */}
+            {editing && (
+              <div className="flex items-center gap-2 pt-2 border-t border-white/10 mt-2">
+                <input
+                  type="text"
+                  placeholder="Name"
+                  value={newExpense.name}
+                  onChange={(ev) => setNewExpense(p => ({ ...p, name: ev.target.value }))}
+                  className="flex-1 rounded-lg px-2 py-1 text-sm"
+                />
+                <span className="text-gray-500">$</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={newExpense.amount}
+                  onChange={(ev) => setNewExpense(p => ({ ...p, amount: ev.target.value }))}
+                  className="w-14 rounded-lg px-2 py-1 text-sm text-right"
+                />
+                <button
+                  onClick={handleAddExpense}
+                  className="bg-indigo-500 text-white px-2 py-1 rounded-lg text-sm hover:bg-indigo-400"
+                >
+                  +
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1303,8 +1338,18 @@ export default function BankStatements() {
         </div>
       </div>
 
-      {/* Fixed Expenses Section */}
-      <FixedExpensesSection expenses={fixedExpenses} onUpdate={setFixedExpenses} />
+      {/* Fixed Expenses Section - pass actual discretionary spending from transactions */}
+      <FixedExpensesSection
+        expenses={fixedExpenses}
+        onUpdate={setFixedExpenses}
+        discretionarySpending={
+          transactions.length > 0
+            ? Math.abs(transactions
+                .filter(t => t.amount < 0 && !EXCLUDED_FROM_EXPENSES.includes(t.category))
+                .reduce((sum, t) => sum + t.amount, 0))
+            : 0
+        }
+      />
 
       <FileUpload onUpload={handleUpload} />
 
