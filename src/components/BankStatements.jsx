@@ -28,12 +28,19 @@ function getLearnedCategories() {
   }
 }
 
-// Save a learned category mapping
+// Save a learned category mapping (saves both exact and core merchant name)
 function learnCategory(description, category) {
   const learned = getLearnedCategories();
-  // Normalize the description to a key (lowercase, trim extra spaces)
+  // Save exact description
   const key = description.toLowerCase().trim();
   learned[key] = category;
+
+  // Also save the core merchant name for fuzzy matching
+  const { coreName } = extractCoreMerchantName(description);
+  if (coreName && coreName !== key && coreName.length >= 3) {
+    learned[coreName] = category;
+  }
+
   localStorage.setItem(LEARNED_CATEGORIES_KEY, JSON.stringify(learned));
 }
 
@@ -111,8 +118,65 @@ const CATEGORY_COLORS = {
 // Categories to exclude from expense calculations (not real spending)
 const EXCLUDED_FROM_EXPENSES = ['Payment'];
 
+// Smart categorization hints based on common merchant prefixes/patterns
+const SMART_HINTS = {
+  // Square merchants (SQ *) - usually food/retail
+  'sq *': { likely: ['Dining', 'Groceries', 'Shopping'], hint: 'Square POS - likely food or retail' },
+  'sq*': { likely: ['Dining', 'Groceries', 'Shopping'], hint: 'Square POS' },
+  // Toast POS (TST*) - restaurants
+  'tst*': { likely: ['Dining'], hint: 'Toast POS - restaurant' },
+  'tst *': { likely: ['Dining'], hint: 'Toast POS - restaurant' },
+  // Clover POS
+  'clover*': { likely: ['Dining', 'Shopping'], hint: 'Clover POS' },
+  // Common delivery
+  'doordash': { likely: ['Dining'], hint: 'Food delivery' },
+  'uber eats': { likely: ['Dining'], hint: 'Food delivery' },
+  'grubhub': { likely: ['Dining'], hint: 'Food delivery' },
+  'seamless': { likely: ['Dining'], hint: 'Food delivery' },
+  'postmates': { likely: ['Dining'], hint: 'Food delivery' },
+  'caviar': { likely: ['Dining'], hint: 'Food delivery' },
+};
+
+// Extract core merchant name by removing location, prefixes, and suffixes
+function extractCoreMerchantName(description) {
+  let name = description.toLowerCase().trim();
+
+  // Remove common POS prefixes but keep them for pattern matching
+  const prefixMatch = name.match(/^(sq \*|sq\*|tst\*|tst \*|clover\*)\s*/i);
+  const prefix = prefixMatch ? prefixMatch[1] : '';
+  if (prefix) {
+    name = name.slice(prefix.length).trim();
+  }
+
+  // Remove location patterns (city, state abbreviations at end)
+  // Patterns: "New York NY", "BROOKLYN NY", "Long Valley NJ", "CA", "800-123-4567"
+  name = name
+    .replace(/\s+\d{3}[-.]?\d{3}[-.]?\d{4}\s*$/i, '') // phone numbers
+    .replace(/\s+[A-Z]{2}\s*$/i, '') // state abbreviations at end
+    .replace(/\s+(new york|brooklyn|manhattan|queens|bronx|los angeles|san francisco|chicago|boston|seattle|austin|denver|miami|atlanta)\s*[a-z]{0,2}\s*$/i, '') // common cities
+    .replace(/\s+[a-z]+\s+[a-z]{2}\s*$/i, '') // "City ST" pattern
+    .replace(/\s*#\d+\s*$/i, '') // store numbers like #123
+    .replace(/\s+\d+\s*$/i, '') // trailing numbers
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return { coreName: name, prefix };
+}
+
+// Get smart hint for a description
+function getSmartHint(description) {
+  const lower = description.toLowerCase();
+  for (const [pattern, hint] of Object.entries(SMART_HINTS)) {
+    if (lower.includes(pattern)) {
+      return hint;
+    }
+  }
+  return null;
+}
+
 function categorizeTransaction(description) {
   const lower = description.toLowerCase().trim();
+  const { coreName } = extractCoreMerchantName(description);
 
   // First, check if we have a learned category for this exact description
   const learned = getLearnedCategories();
@@ -120,10 +184,19 @@ function categorizeTransaction(description) {
     return learned[lower];
   }
 
-  // Also check if any learned keyword is contained in the description
+  // Check for core merchant name match (fuzzy matching)
+  if (learned[coreName] && coreName !== lower) {
+    return learned[coreName];
+  }
+
+  // Check if any learned core name is contained in this description's core name
   for (const [learnedDesc, category] of Object.entries(learned)) {
-    if (lower.includes(learnedDesc) || learnedDesc.includes(lower)) {
-      return category;
+    const { coreName: learnedCore } = extractCoreMerchantName(learnedDesc);
+    // Match if core names are similar (one contains the other, min 5 chars)
+    if (learnedCore.length >= 5 && coreName.length >= 5) {
+      if (coreName.includes(learnedCore) || learnedCore.includes(coreName)) {
+        return category;
+      }
     }
   }
 
@@ -413,7 +486,7 @@ function FileUpload({ onUpload }) {
   );
 }
 
-function TransactionList({ transactions, onUpdateCategory, onDelete }) {
+function TransactionList({ transactions, onUpdateCategory, onDelete, onRefresh }) {
   const [filter, setFilter] = useState('all');
 
   const filtered = filter === 'all'
@@ -438,7 +511,13 @@ function TransactionList({ transactions, onUpdateCategory, onDelete }) {
       <div className="flex justify-between items-center mb-4">
         <h3 className="font-semibold text-white">Transactions ({expenses.length})</h3>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">Click 🔍 to identify merchants</span>
+          <button
+            onClick={onRefresh}
+            className="text-xs text-indigo-400 hover:text-indigo-300 px-2 py-1 rounded-lg hover:bg-white/5 transition-colors"
+            title="Re-apply learned categories to all transactions"
+          >
+            ↻ Refresh
+          </button>
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -455,7 +534,9 @@ function TransactionList({ transactions, onUpdateCategory, onDelete }) {
         {expenses.length === 0 ? (
           <p className="text-gray-400 text-center py-4">No transactions to show</p>
         ) : (
-          expenses.map(t => (
+          expenses.map(t => {
+            const hint = t.category === 'Other' ? getSmartHint(t.description) : null;
+            return (
             <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-white/5 group">
               <div
                 className="w-3 h-3 rounded-full shrink-0"
@@ -472,7 +553,14 @@ function TransactionList({ transactions, onUpdateCategory, onDelete }) {
                     🔍
                   </button>
                 </div>
-                <div className="text-xs text-gray-500">{t.date}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">{t.date}</span>
+                  {hint && (
+                    <span className="text-xs text-amber-400/70" title={hint.hint}>
+                      💡 Likely: {hint.likely[0]}
+                    </span>
+                  )}
+                </div>
               </div>
               <select
                 value={t.category}
@@ -493,7 +581,8 @@ function TransactionList({ transactions, onUpdateCategory, onDelete }) {
                 ×
               </button>
             </div>
-          ))
+          );
+          })
         )}
       </div>
     </div>
@@ -598,6 +687,8 @@ function MonthlySpendingChart({ transactions }) {
 }
 
 function SpendingChart({ transactions, selectedMonth }) {
+  const [showAllCategories, setShowAllCategories] = useState(false);
+
   const categoryTotals = useMemo(() => {
     const totals = {};
     transactions
@@ -616,6 +707,7 @@ function SpendingChart({ transactions, selectedMonth }) {
   }, [transactions]);
 
   const totalSpent = categoryTotals.reduce((sum, c) => sum + c.value, 0);
+  const displayCategories = showAllCategories ? categoryTotals : categoryTotals.slice(0, 6);
 
   if (categoryTotals.length === 0) {
     return null;
@@ -652,7 +744,7 @@ function SpendingChart({ transactions, selectedMonth }) {
           </PieChart>
         </ResponsiveContainer>
         <div className="space-y-2">
-          {categoryTotals.slice(0, 6).map(cat => (
+          {displayCategories.map(cat => (
             <div key={cat.name} className="flex items-center gap-2">
               <div
                 className="w-3 h-3 rounded-full shrink-0"
@@ -666,9 +758,12 @@ function SpendingChart({ transactions, selectedMonth }) {
             </div>
           ))}
           {categoryTotals.length > 6 && (
-            <div className="text-xs text-gray-500 pt-2">
-              +{categoryTotals.length - 6} more categories
-            </div>
+            <button
+              onClick={() => setShowAllCategories(!showAllCategories)}
+              className="text-xs text-indigo-400 hover:text-indigo-300 pt-2 transition-colors"
+            >
+              {showAllCategories ? '▲ Show less' : `▼ +${categoryTotals.length - 6} more categories`}
+            </button>
           )}
         </div>
       </div>
@@ -1157,6 +1252,18 @@ export default function BankStatements() {
     }
   };
 
+  // Re-categorize all transactions using current learned categories
+  const handleRefresh = () => {
+    setTransactions(prev => {
+      const updated = prev.map(t => ({
+        ...t,
+        category: categorizeTransaction(t.description)
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center flex-wrap gap-2">
@@ -1206,6 +1313,7 @@ export default function BankStatements() {
             transactions={filteredTransactions}
             onUpdateCategory={handleUpdateCategory}
             onDelete={handleDelete}
+            onRefresh={handleRefresh}
           />
 
           {/* Clear All Button - prominent at bottom */}
