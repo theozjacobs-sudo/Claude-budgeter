@@ -52,12 +52,21 @@ const CATEGORIES = {
     // International
     'supermercato', 'supermarket', 'mercado', 'carrefour', 'lidl', 'tesco', 'sainsbury', 'coop', 'esselunga', 'conad', 'simply', 'eurospin'
   ],
+  'Coffee & Bakery': [
+    'coffee', 'starbucks', 'dunkin', 'peets', 'blue bottle', 'philz', 'intelligentsia', 'la colombe', 'tim hortons',
+    'bakery', 'bakehouse', 'patisserie', 'boulangerie', 'pasticceria', 'panetteria', 'bagel', 'donut', 'doughnut', 'croissant',
+    'cafe', 'caffè', 'caffe', 'espresso'
+  ],
   'Dining': [
-    'restaurant', 'cafe', 'coffee', 'starbucks', 'mcdonald', 'chipotle', 'doordash', 'uber eats', 'grubhub', 'seamless', 'postmates', 'pizza', 'burger', 'taco', 'sushi', 'thai', 'indian', 'chinese', 'mexican',
+    'restaurant', 'mcdonald', 'chipotle', 'doordash', 'uber eats', 'grubhub', 'seamless', 'postmates', 'pizza', 'burger', 'taco', 'sushi', 'thai', 'indian', 'chinese', 'mexican',
     // Italian
-    'trattoria', 'ristorante', 'osteria', 'pizzeria', 'locanda', 'taverna', 'gelateria', 'pasticceria', 'panetteria', 'rosticceria',
+    'trattoria', 'ristorante', 'osteria', 'pizzeria', 'locanda', 'taverna', 'gelateria', 'rosticceria',
     // Other international
     'brasserie', 'bistro', 'gasthaus', 'cerveceria', 'tapas', 'lido'
+  ],
+  'Clubs': [
+    'nightclub', 'club', 'lounge', 'discotheque', 'disco', 'velvet', 'marquee', 'lavo', 'tao', '1oak', 'avenue', 'up&down',
+    'house of yes', 'elsewhere', 'avant gardner', 'good room', 'nowadays', 'superior ingredients', 'basement', 'mirage'
   ],
   'Bikes & Scooters': [
     'citibike', 'citi bike', 'lime', 'bird', 'spin', 'veo', 'link', 'helbiz', 'revel', 'scoot', 'jump', 'lyft bike', 'uber bike', 'divvy', 'capital bikeshare', 'bluebikes', 'bay wheels'
@@ -101,7 +110,9 @@ const CATEGORIES = {
 
 const CATEGORY_COLORS = {
   'Groceries': '#22c55e',
+  'Coffee & Bakery': '#d97706', // Amber/brown for coffee
   'Dining': '#f97316',
+  'Clubs': '#a855f7', // Purple for nightlife
   'Bikes & Scooters': '#10b981',
   'Transport': '#3b82f6',
   'Shopping': '#ec4899',
@@ -111,7 +122,7 @@ const CATEGORY_COLORS = {
   'Subscriptions': '#6366f1',
   'Bars': '#eab308',
   'Travel': '#06b6d4',
-  'Payment': '#4ade80', // Green for payments (money going out to pay debt)
+  'Payment': '#4ade80',
   'Other': '#9ca3af',
 };
 
