@@ -1521,12 +1521,29 @@ export default function BankStatements() {
     localStorage.setItem(FIXED_EXPENSES_KEY, JSON.stringify(fixedExpenses));
   }, [fixedExpenses]);
 
+  // Store previous state for undo functionality
+  const [previousTransactions, setPreviousTransactions] = useState(null);
+  const [lastUploadCount, setLastUploadCount] = useState(0);
+
   const handleUpload = (newTransactions) => {
     setTransactions(prev => {
+      // Save current state for undo
+      setPreviousTransactions(prev);
+      setLastUploadCount(newTransactions.length);
+
       const updated = [...prev, ...newTransactions];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
+  };
+
+  const handleUndo = () => {
+    if (previousTransactions !== null) {
+      setTransactions(previousTransactions);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(previousTransactions));
+      setPreviousTransactions(null);
+      setLastUploadCount(0);
+    }
   };
 
   const handleUpdateCategory = (id, category) => {
@@ -1597,6 +1614,14 @@ export default function BankStatements() {
                 <option key={month} value={month}>{month}</option>
               ))}
             </select>
+          )}
+          {previousTransactions !== null && (
+            <button
+              onClick={handleUndo}
+              className="text-xs text-amber-400 hover:text-amber-300 px-3 py-1 rounded-lg hover:bg-amber-500/10 border border-amber-500/30"
+            >
+              ↶ Undo Upload ({lastUploadCount})
+            </button>
           )}
           {transactions.length > 0 && (
             <button
