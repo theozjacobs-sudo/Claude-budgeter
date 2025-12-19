@@ -87,7 +87,7 @@ const CATEGORIES = {
   ],
   // Credit card payments - not actual expenses, just paying off the card
   'Payment': [
-    'payment thank you', 'payment - thank you', 'autopay', 'auto pay', 'automatic payment', 'balance payment'
+    'payment thank you', 'payment-thank you', 'payment thank', 'autopay', 'auto pay', 'automatic payment', 'balance payment', 'statement credit', 'rewards redemption', 'cashback', 'cash back reward'
   ],
   'Other': []
 };
