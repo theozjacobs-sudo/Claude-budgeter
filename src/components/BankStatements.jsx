@@ -8,6 +8,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLi
 const STORAGE_KEY = 'budget-planner-transactions';
 const FIXED_EXPENSES_KEY = 'budget-planner-fixed-expenses';
 const LEARNED_CATEGORIES_KEY = 'budget-planner-learned-categories';
+const INCOME_KEY = 'budget-planner-income';
+
+// Default income (bi-weekly salary)
+const DEFAULT_INCOME = {
+  biweekly: 2522.97,
+  payFrequency: 'biweekly', // biweekly, weekly, monthly
+};
 
 // Default fixed expenses - distinct colors for better visibility
 const DEFAULT_FIXED_EXPENSES = [
@@ -853,7 +860,7 @@ function SpendingChart({ transactions, selectedMonth }) {
             </Pie>
             <Tooltip
               contentStyle={{ background: 'rgba(15, 15, 35, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-              formatter={(value) => [`$${value.toFixed(2)}`, '']}
+              formatter={(value, name) => [`$${value.toFixed(2)}`, name]}
               labelStyle={{ color: 'white' }}
               itemStyle={{ color: '#e5e7eb' }}
             />
@@ -1216,6 +1223,151 @@ function FixedExpensesSection({ expenses, onUpdate, discretionarySpending = 0 })
   );
 }
 
+// Income vs Spending tracking component
+function IncomeVsSpending({ income, onUpdateIncome, totalSpending, fixedExpenses }) {
+  const [editing, setEditing] = useState(false);
+
+  // Calculate monthly income based on pay frequency
+  const monthlyIncome = useMemo(() => {
+    switch (income.payFrequency) {
+      case 'weekly': return income.biweekly * 52 / 12;
+      case 'biweekly': return income.biweekly * 26 / 12;
+      case 'monthly': return income.biweekly;
+      default: return income.biweekly * 26 / 12;
+    }
+  }, [income]);
+
+  const totalFixed = fixedExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalMonthlySpending = totalSpending + totalFixed;
+  const balance = monthlyIncome - totalMonthlySpending;
+  const savingsRate = monthlyIncome > 0 ? Math.round((balance / monthlyIncome) * 100) : 0;
+
+  const chartData = [
+    { name: 'Income', amount: Math.round(monthlyIncome), color: '#22c55e' },
+    { name: 'Spending', amount: Math.round(totalMonthlySpending), color: '#ef4444' },
+  ];
+
+  const handleSalaryChange = (value) => {
+    const num = parseFloat(value) || 0;
+    onUpdateIncome({ ...income, biweekly: num });
+  };
+
+  return (
+    <div className="glass-card rounded-2xl p-5">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-semibold text-white">Income vs Spending</h3>
+        <button
+          onClick={() => setEditing(!editing)}
+          className="text-xs text-indigo-400 hover:text-indigo-300 px-2 py-1 rounded-lg hover:bg-indigo-500/10"
+        >
+          {editing ? 'Done' : 'Edit Income'}
+        </button>
+      </div>
+
+      {/* Income Settings (when editing) */}
+      {editing && (
+        <div className="mb-4 p-3 rounded-lg bg-white/5 space-y-3">
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-400 w-24">Pay Amount:</label>
+            <span className="text-gray-500">$</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={income.biweekly}
+              onChange={(e) => handleSalaryChange(e.target.value)}
+              className="flex-1 rounded-lg px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-400 w-24">Frequency:</label>
+            <select
+              value={income.payFrequency}
+              onChange={(e) => onUpdateIncome({ ...income, payFrequency: e.target.value })}
+              className="flex-1 rounded-lg px-3 py-1.5 text-sm"
+            >
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Bi-weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div className="text-xs text-gray-500">
+            Monthly income: ${monthlyIncome.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </div>
+        </div>
+      )}
+
+      {/* Bar Chart Comparison */}
+      <ResponsiveContainer width="100%" height={80}>
+        <BarChart data={chartData} layout="vertical" barSize={30}>
+          <XAxis type="number" hide />
+          <YAxis type="category" dataKey="name" hide />
+          <Tooltip
+            contentStyle={{ background: 'rgba(15, 15, 35, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+            formatter={(value) => [`$${value.toLocaleString()}`, '']}
+          />
+          <Bar dataKey="amount" radius={[4, 4, 4, 4]}>
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.color} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-3 gap-4 mt-4">
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1.5 mb-1">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            <span className="text-xs text-gray-400">Income</span>
+          </div>
+          <div className="text-lg font-bold text-emerald-400">
+            ${monthlyIncome.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </div>
+        </div>
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1.5 mb-1">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+            <span className="text-xs text-gray-400">Spending</span>
+          </div>
+          <div className="text-lg font-bold text-red-400">
+            ${totalMonthlySpending.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </div>
+        </div>
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1.5 mb-1">
+            <div className={`w-2.5 h-2.5 rounded-full ${balance >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <span className="text-xs text-gray-400">Balance</span>
+          </div>
+          <div className={`text-lg font-bold ${balance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {balance >= 0 ? '+' : ''}${balance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </div>
+        </div>
+      </div>
+
+      {/* Savings Rate */}
+      <div className="mt-4 pt-4 border-t border-white/10">
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-400">Monthly Savings Rate</span>
+          <span className={`text-lg font-bold ${savingsRate >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {savingsRate}%
+          </span>
+        </div>
+        <div className="mt-2 h-2 bg-white/10 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${savingsRate >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}
+            style={{ width: `${Math.min(Math.abs(savingsRate), 100)}%` }}
+          />
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          {balance >= 0
+            ? `You're saving $${balance.toFixed(0)}/month`
+            : `You're overspending by $${Math.abs(balance).toFixed(0)}/month`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function LearnedCategoriesInfo() {
   const [learned, setLearned] = useState(() => getLearnedCategories());
   const [expanded, setExpanded] = useState(false);
@@ -1339,7 +1491,21 @@ export default function BankStatements() {
     }
   });
 
+  const [income, setIncome] = useState(() => {
+    try {
+      const saved = localStorage.getItem(INCOME_KEY);
+      return saved ? JSON.parse(saved) : DEFAULT_INCOME;
+    } catch {
+      return DEFAULT_INCOME;
+    }
+  });
+
   const [selectedMonth, setSelectedMonth] = useState('all');
+
+  // Save income to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem(INCOME_KEY, JSON.stringify(income));
+  }, [income]);
 
   // Get unique months for filter dropdown
   const availableMonths = useMemo(() => getUniqueMonths(transactions), [transactions]);
@@ -1454,6 +1620,20 @@ export default function BankStatements() {
                 .reduce((sum, t) => sum + t.amount, 0))
             : 0
         }
+      />
+
+      {/* Income vs Spending tracking */}
+      <IncomeVsSpending
+        income={income}
+        onUpdateIncome={setIncome}
+        totalSpending={
+          transactions.length > 0
+            ? Math.abs(transactions
+                .filter(t => t.amount < 0 && !EXCLUDED_FROM_EXPENSES.includes(t.category))
+                .reduce((sum, t) => sum + t.amount, 0))
+            : 0
+        }
+        fixedExpenses={fixedExpenses}
       />
 
       <FileUpload onUpload={handleUpload} />
