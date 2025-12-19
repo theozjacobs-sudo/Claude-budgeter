@@ -1586,6 +1586,39 @@ export default function BankStatements() {
     }
   };
 
+  // Find duplicate count
+  const duplicateCount = useMemo(() => {
+    const seen = new Set();
+    let dupes = 0;
+    transactions.forEach(t => {
+      const key = `${t.date}|${t.description.toLowerCase()}|${t.amount}`;
+      if (seen.has(key)) {
+        dupes++;
+      } else {
+        seen.add(key);
+      }
+    });
+    return dupes;
+  }, [transactions]);
+
+  // Remove duplicate transactions (keeps first occurrence)
+  const handleRemoveDuplicates = () => {
+    if (duplicateCount === 0) return;
+
+    const seen = new Set();
+    const unique = transactions.filter(t => {
+      const key = `${t.date}|${t.description.toLowerCase()}|${t.amount}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+
+    setTransactions(unique);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(unique));
+  };
+
   // Re-categorize all transactions using current learned categories
   const handleRefresh = () => {
     setTransactions(prev => {
@@ -1621,6 +1654,14 @@ export default function BankStatements() {
               className="text-xs text-amber-400 hover:text-amber-300 px-3 py-1 rounded-lg hover:bg-amber-500/10 border border-amber-500/30"
             >
               ↶ Undo Upload ({lastUploadCount})
+            </button>
+          )}
+          {duplicateCount > 0 && (
+            <button
+              onClick={handleRemoveDuplicates}
+              className="text-xs text-orange-400 hover:text-orange-300 px-3 py-1 rounded-lg hover:bg-orange-500/10 border border-orange-500/30"
+            >
+              Remove {duplicateCount} Duplicate{duplicateCount > 1 ? 's' : ''}
             </button>
           )}
           {transactions.length > 0 && (
