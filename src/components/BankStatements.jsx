@@ -600,6 +600,111 @@ function TransactionList({ transactions, onUpdateCategory, onDelete, onRefresh }
   );
 }
 
+// Review and accept/change smart suggestions for "Other" category transactions
+function SuggestionsReview({ transactions, onUpdateCategory }) {
+  // Find all "Other" transactions that have smart hints
+  const suggestions = useMemo(() => {
+    return transactions
+      .filter(t => t.amount < 0 && t.category === 'Other')
+      .map(t => {
+        const hint = getSmartHint(t.description);
+        return hint ? { ...t, suggestedCategory: hint.likely[0], hint: hint.hint } : null;
+      })
+      .filter(Boolean);
+  }, [transactions]);
+
+  // Track user's chosen category for each suggestion (starts with the suggested one)
+  const [choices, setChoices] = useState({});
+
+  // Initialize choices when suggestions change
+  useEffect(() => {
+    const initial = {};
+    suggestions.forEach(s => {
+      if (!choices[s.id]) {
+        initial[s.id] = s.suggestedCategory;
+      }
+    });
+    if (Object.keys(initial).length > 0) {
+      setChoices(prev => ({ ...prev, ...initial }));
+    }
+  }, [suggestions]);
+
+  const handleChoiceChange = (id, category) => {
+    setChoices(prev => ({ ...prev, [id]: category }));
+  };
+
+  const handleAcceptOne = (id) => {
+    const category = choices[id];
+    if (category) {
+      onUpdateCategory(id, category);
+    }
+  };
+
+  const handleAcceptAll = () => {
+    suggestions.forEach(s => {
+      const category = choices[s.id] || s.suggestedCategory;
+      onUpdateCategory(s.id, category);
+    });
+  };
+
+  if (suggestions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="glass-card rounded-2xl p-5 border border-amber-500/30">
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h3 className="font-semibold text-white flex items-center gap-2">
+            <span className="text-amber-400">💡</span>
+            Review Suggestions ({suggestions.length})
+          </h3>
+          <p className="text-xs text-gray-400 mt-1">Quick review uncategorized transactions with smart hints</p>
+        </div>
+        <button
+          onClick={handleAcceptAll}
+          className="bg-amber-500/20 border border-amber-500/50 text-amber-400 hover:bg-amber-500/30 px-4 py-2 rounded-xl transition-all text-sm font-medium"
+        >
+          ✓ Accept All ({suggestions.length})
+        </button>
+      </div>
+
+      <div className="space-y-2 max-h-64 overflow-y-auto">
+        {suggestions.map(s => (
+          <div key={s.id} className="flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm text-gray-300 truncate">{s.description}</div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-gray-500">{s.date}</span>
+                <span className="text-amber-400/70">{s.hint}</span>
+              </div>
+            </div>
+            <div className="text-red-400 font-medium text-sm w-16 text-right">
+              ${Math.abs(s.amount).toFixed(2)}
+            </div>
+            <select
+              value={choices[s.id] || s.suggestedCategory}
+              onChange={(e) => handleChoiceChange(s.id, e.target.value)}
+              className="text-xs rounded-lg px-2 py-1.5 bg-amber-500/20 border border-amber-500/30 text-amber-300"
+            >
+              {Object.keys(CATEGORIES).filter(c => c !== 'Other' && c !== 'Payment').map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => handleAcceptOne(s.id)}
+              className="text-emerald-400 hover:text-emerald-300 text-sm px-2 py-1 rounded hover:bg-emerald-500/20"
+              title="Accept this suggestion"
+            >
+              ✓
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Helper to extract month key from date string (MM/DD or MM/DD/YYYY)
 function getMonthKey(dateStr) {
   if (!dateStr) return 'Unknown';
@@ -1365,6 +1470,13 @@ export default function BankStatements() {
           <SpendingInsights transactions={filteredTransactions} />
           <TopSpendingWarnings transactions={filteredTransactions} />
           <SpendingChart transactions={filteredTransactions} selectedMonth={selectedMonth} />
+
+          {/* Quick review suggestions for uncategorized transactions */}
+          <SuggestionsReview
+            transactions={transactions}
+            onUpdateCategory={handleUpdateCategory}
+          />
+
           <TransactionList
             transactions={filteredTransactions}
             onUpdateCategory={handleUpdateCategory}
