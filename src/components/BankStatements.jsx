@@ -787,6 +787,11 @@ function getUniqueMonths(transactions) {
 
 // Monthly spending bar chart component
 function MonthlySpendingChart({ transactions }) {
+  const [selectedCategories, setSelectedCategories] = useState(() => {
+    // Start with all categories selected
+    return new Set(Object.keys(CATEGORY_COLORS));
+  });
+
   const monthlyData = useMemo(() => {
     const byMonth = {};
     transactions
@@ -819,35 +824,99 @@ function MonthlySpendingChart({ transactions }) {
 
   if (monthlyData.length === 0) return null;
 
-  const categories = Object.keys(CATEGORY_COLORS).filter(c => c !== 'Other');
+  const allCategories = Object.keys(CATEGORY_COLORS);
+
+  const toggleCategory = (category) => {
+    setSelectedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(category)) {
+        newSet.delete(category);
+      } else {
+        newSet.add(category);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedCategories(new Set(allCategories));
+  };
+
+  const clearAll = () => {
+    setSelectedCategories(new Set());
+  };
 
   return (
     <div className="glass-card rounded-2xl p-5">
-      <h3 className="font-semibold text-white mb-4">Monthly Variable Spending</h3>
-      <p className="text-xs text-gray-500 mb-3">Excludes fixed expenses (rent, utilities, etc.)</p>
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="font-semibold text-white">Monthly Variable Spending</h3>
+        <div className="flex gap-2">
+          <button
+            onClick={selectAll}
+            className="text-xs text-indigo-400 hover:text-indigo-300 px-2 py-1 rounded-lg hover:bg-indigo-500/10"
+          >
+            Select All
+          </button>
+          <button
+            onClick={clearAll}
+            className="text-xs text-gray-400 hover:text-gray-300 px-2 py-1 rounded-lg hover:bg-white/5"
+          >
+            Clear All
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-gray-500 mb-3">Click categories below to show/hide • Excludes fixed expenses</p>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={monthlyData}>
           <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 12 }} />
           <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} tickFormatter={v => `$${v}`} />
           <Tooltip
-            contentStyle={{ background: 'rgba(15, 15, 35, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+            contentStyle={{
+              background: 'rgba(15, 15, 35, 0.98)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '12px',
+              padding: '12px'
+            }}
             formatter={(value, name) => [`$${value}`, name]}
-            labelStyle={{ color: 'white' }}
-            itemStyle={{ color: '#e5e7eb' }}
+            labelStyle={{ color: 'white', fontWeight: 'bold', marginBottom: '8px' }}
+            itemStyle={{ color: '#e5e7eb', padding: '2px 0' }}
           />
-          {categories.map(cat => (
-            <Bar key={cat} dataKey={cat} stackId="a" fill={CATEGORY_COLORS[cat]} />
+          {allCategories.map(cat => (
+            selectedCategories.has(cat) && (
+              <Bar
+                key={cat}
+                dataKey={cat}
+                stackId="a"
+                fill={CATEGORY_COLORS[cat]}
+                radius={cat === allCategories[allCategories.length - 1] ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+              />
+            )
           ))}
-          <Bar dataKey="Other" stackId="a" fill={CATEGORY_COLORS['Other']} />
         </BarChart>
       </ResponsiveContainer>
       <div className="flex flex-wrap gap-2 mt-3 justify-center">
-        {categories.slice(0, 6).map(cat => (
-          <div key={cat} className="flex items-center gap-1.5 text-xs">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[cat] }} />
-            <span className="text-gray-400">{cat}</span>
-          </div>
-        ))}
+        {allCategories.map(cat => {
+          const isSelected = selectedCategories.has(cat);
+          return (
+            <button
+              key={cat}
+              onClick={() => toggleCategory(cat)}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition-all ${
+                isSelected
+                  ? 'bg-white/10 hover:bg-white/15'
+                  : 'bg-white/5 hover:bg-white/10 opacity-40'
+              }`}
+            >
+              <div
+                className={`w-2.5 h-2.5 rounded-full transition-all ${isSelected ? 'scale-100' : 'scale-75'}`}
+                style={{ backgroundColor: CATEGORY_COLORS[cat] }}
+              />
+              <span className={`${isSelected ? 'text-gray-300' : 'text-gray-500 line-through'}`}>
+                {cat}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
