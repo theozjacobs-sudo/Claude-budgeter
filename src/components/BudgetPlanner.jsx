@@ -2,6 +2,7 @@ import { useState } from 'react';
 import WeeklyTracker from './WeeklyTracker';
 import YearlyProjection from './YearlyProjection';
 import BankStatements from './BankStatements';
+import BalanceTracker from './BalanceTracker';
 
 function TabButton({ active, onClick, children }) {
   return (
@@ -46,6 +47,12 @@ export default function BudgetPlanner() {
           Yearly Projection
         </TabButton>
         <TabButton
+          active={activeTab === 'balances'}
+          onClick={() => setActiveTab('balances')}
+        >
+          Balance Tracker
+        </TabButton>
+        <TabButton
           active={activeTab === 'statements'}
           onClick={() => setActiveTab('statements')}
         >
@@ -56,6 +63,7 @@ export default function BudgetPlanner() {
       {/* Tab Content */}
       {activeTab === 'weekly' && <WeeklyTracker />}
       {activeTab === 'projection' && <YearlyProjection />}
+      {activeTab === 'balances' && <BalanceTracker />}
       {activeTab === 'statements' && <BankStatements />}
     </div>
   );
