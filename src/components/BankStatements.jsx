@@ -785,6 +785,35 @@ function getUniqueMonths(transactions) {
   });
 }
 
+// Custom tooltip for monthly spending chart
+function MonthlySpendingTooltip({ active, payload, label }) {
+  if (active && payload && payload.length) {
+    const total = payload.reduce((sum, entry) => sum + (entry.value || 0), 0);
+
+    return (
+      <div className="glass-card rounded-lg p-3 text-sm border border-white/20">
+        <p className="text-white font-bold mb-2">{label}</p>
+        <div className="space-y-1 text-xs max-h-48 overflow-y-auto">
+          {payload.map((entry, index) => (
+            <div key={index} className="flex justify-between gap-3">
+              <span className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                <span className="text-gray-300">{entry.name}</span>
+              </span>
+              <span className="text-white font-medium">${entry.value}</span>
+            </div>
+          ))}
+        </div>
+        <div className="pt-2 mt-2 border-t border-white/20 flex justify-between font-bold">
+          <span className="text-gray-300">Total</span>
+          <span className="text-emerald-400">${total}</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
 // Monthly spending bar chart component
 function MonthlySpendingChart({ transactions }) {
   const [selectedCategories, setSelectedCategories] = useState(() => {
@@ -870,17 +899,7 @@ function MonthlySpendingChart({ transactions }) {
         <BarChart data={monthlyData}>
           <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 12 }} />
           <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} tickFormatter={v => `$${v}`} />
-          <Tooltip
-            contentStyle={{
-              background: 'rgba(15, 15, 35, 0.98)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '12px',
-              padding: '12px'
-            }}
-            formatter={(value, name) => [`$${value}`, name]}
-            labelStyle={{ color: 'white', fontWeight: 'bold', marginBottom: '8px' }}
-            itemStyle={{ color: '#e5e7eb', padding: '2px 0' }}
-          />
+          <Tooltip content={<MonthlySpendingTooltip />} />
           {allCategories.map(cat => (
             selectedCategories.has(cat) && (
               <Bar
