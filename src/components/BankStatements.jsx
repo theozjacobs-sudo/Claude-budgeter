@@ -76,7 +76,7 @@ const CATEGORIES = {
     'house of yes', 'elsewhere', 'avant gardner', 'good room', 'nowadays', 'superior ingredients', 'basement', 'mirage'
   ],
   'Bikes & Scooters': [
-    'citibike', 'citi bike', 'lime', 'bird', 'spin', 'veo', 'link', 'helbiz', 'revel', 'scoot', 'jump', 'lyft bike', 'uber bike', 'divvy', 'capital bikeshare', 'bluebikes', 'bay wheels'
+    'citibike', 'citi bike', 'citibik', 'lime', 'bird', 'spin', 'veo', 'link', 'helbiz', 'revel', 'scoot', 'jump', 'lyft bike', 'uber bike', 'divvy', 'capital bikeshare', 'bluebikes', 'bay wheels'
   ],
   'Transport': [
     'uber', 'lyft', 'gas', 'shell', 'chevron', 'exxon', 'bp', 'parking', 'transit', 'metro', 'subway', 'bart', 'caltrain', 'amtrak',
