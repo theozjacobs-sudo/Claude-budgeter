@@ -131,7 +131,11 @@ const CATEGORY_COLORS = {
   'Travel': '#06b6d4',
   'Payment': '#4ade80',
   'Other': '#9ca3af',
+  'Rent + Utils': '#475569', // Slate gray for fixed expenses
 };
+
+// Fixed monthly expenses
+const FIXED_MONTHLY_EXPENSE = 2525;
 
 // Categories to exclude from expense calculations (not real spending)
 const EXCLUDED_FROM_EXPENSES = ['Payment'];
@@ -817,8 +821,10 @@ function MonthlySpendingTooltip({ active, payload, label }) {
 // Monthly spending bar chart component
 function MonthlySpendingChart({ transactions }) {
   const [selectedCategories, setSelectedCategories] = useState(() => {
-    // Start with all categories selected
-    return new Set(Object.keys(CATEGORY_COLORS));
+    // Start with all categories selected except Rent + Utils
+    const allCategories = new Set(Object.keys(CATEGORY_COLORS));
+    allCategories.delete('Rent + Utils'); // Start with this deselected
+    return allCategories;
   });
 
   const monthlyData = useMemo(() => {
@@ -838,6 +844,7 @@ function MonthlySpendingChart({ transactions }) {
       .map(m => ({
         name: m.month,
         total: Math.round(m.total),
+        'Rent + Utils': FIXED_MONTHLY_EXPENSE, // Add fixed expense to every month
         ...Object.fromEntries(
           Object.entries(m.categories).map(([k, v]) => [k, Math.round(v)])
         )
@@ -853,7 +860,8 @@ function MonthlySpendingChart({ transactions }) {
 
   if (monthlyData.length === 0) return null;
 
-  const allCategories = Object.keys(CATEGORY_COLORS);
+  // Put "Rent + Utils" first, then all other categories
+  const allCategories = ['Rent + Utils', ...Object.keys(CATEGORY_COLORS).filter(c => c !== 'Rent + Utils')];
 
   const toggleCategory = (category) => {
     setSelectedCategories(prev => {
@@ -878,7 +886,7 @@ function MonthlySpendingChart({ transactions }) {
   return (
     <div className="glass-card rounded-2xl p-5">
       <div className="flex justify-between items-center mb-2">
-        <h3 className="font-semibold text-white">Monthly Variable Spending</h3>
+        <h3 className="font-semibold text-white">Monthly Spending</h3>
         <div className="flex gap-2">
           <button
             onClick={selectAll}
@@ -894,7 +902,7 @@ function MonthlySpendingChart({ transactions }) {
           </button>
         </div>
       </div>
-      <p className="text-xs text-gray-500 mb-3">Click categories below to show/hide • Excludes fixed expenses</p>
+      <p className="text-xs text-gray-500 mb-3">Click categories to show/hide • Toggle "Rent + Utils" ($2,525/mo) to see total spending</p>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={monthlyData}>
           <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 12 }} />
