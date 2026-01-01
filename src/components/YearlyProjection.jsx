@@ -8,7 +8,7 @@ import { PAYCHECK, PAYDATES, MONTHS, DEFAULT_ONE_TIME_EXPENSES, FIXED_MONTHLY } 
 const STORAGE_KEY = 'budget-planner-data';
 
 function ParametersCard({ params, onChange }) {
-  const { startingCash, monthlySpend, bonus, bonusMonth, subletterAmount } = params;
+  const { startingCash, monthlySpend, bonus, bonusMonth, subletterAmount, creditCardDebt } = params;
 
   // Handle input to avoid leading zeros
   const handleNumberChange = (key, value) => {
@@ -29,6 +29,20 @@ function ParametersCard({ params, onChange }) {
           placeholder="0"
           className="w-full rounded-xl px-3 py-2 text-sm"
         />
+      </div>
+      <div>
+        <label className="text-xs text-gray-400 block mb-1">Current credit card debt</label>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={creditCardDebt || ''}
+          onChange={e => handleNumberChange('creditCardDebt', e.target.value.replace(/[^0-9]/g, ''))}
+          placeholder="0"
+          className="w-full rounded-xl px-3 py-2 text-sm"
+        />
+        <div className="text-xs text-gray-400 mt-1">
+          Existing debt to pay off
+        </div>
       </div>
       <div>
         <label className="text-xs text-gray-400 block mb-1">Monthly spend</label>
@@ -90,37 +104,62 @@ function ExpensesCard({ expenses, onToggle, onRemove, onAdd }) {
         name: newExpense.name,
         amount: parseFloat(newExpense.amount),
         month: newExpense.month,
-        enabled: true,
+        status: 'upcoming', // new status field
         priority: 'custom'
       });
       setNewExpense({ name: '', amount: '', month: 'Jan' });
     }
   };
 
-  const totalEnabled = expenses.filter(e => e.enabled).reduce((sum, e) => sum + e.amount, 0);
+  const totalUpcoming = expenses.filter(e => e.status === 'upcoming').reduce((sum, e) => sum + e.amount, 0);
+  const totalPaid = expenses.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amount, 0);
 
   return (
     <div className="glass-card rounded-2xl p-5">
       <div className="flex justify-between items-center mb-3">
         <h2 className="font-semibold text-sm text-white">One-Time Expenses</h2>
-        <span className="text-xs text-indigo-400">${totalEnabled.toLocaleString()} total</span>
+        <div className="text-xs space-y-0.5">
+          <div className="text-indigo-400">${totalUpcoming.toLocaleString()} upcoming</div>
+          {totalPaid > 0 && <div className="text-emerald-400">${totalPaid.toLocaleString()} paid</div>}
+        </div>
       </div>
       <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-        {expenses.map(e => (
+        {expenses.map(e => {
+          const status = e.status || (e.enabled ? 'upcoming' : 'disabled'); // backwards compatibility
+          return (
           <div key={e.id} className="flex items-center gap-2 text-sm group">
-            <input
-              type="checkbox"
-              checked={e.enabled}
-              onChange={() => onToggle(e.id)}
-              className="shrink-0"
-            />
-            <span className={`flex-1 truncate ${!e.enabled ? 'text-gray-500 line-through' : 'text-gray-300'}`}>
+            <button
+              onClick={() => onToggle(e.id)}
+              className={`shrink-0 w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                status === 'upcoming' ? 'border-indigo-400 bg-indigo-500/20' :
+                status === 'paid' ? 'border-emerald-400 bg-emerald-500/20' :
+                'border-gray-600 bg-gray-700/20'
+              }`}
+              title={status === 'upcoming' ? 'Click to mark as paid' : status === 'paid' ? 'Click to disable' : 'Click to enable'}
+            >
+              {status === 'upcoming' && <span className="text-xs text-indigo-400">◉</span>}
+              {status === 'paid' && <span className="text-xs text-emerald-400">✓</span>}
+            </button>
+            <span className={`flex-1 truncate ${
+              status === 'paid' ? 'text-emerald-400/70' :
+              status === 'disabled' ? 'text-gray-500 line-through' :
+              'text-gray-300'
+            }`}>
               {e.name}
             </span>
-            <span className={`text-xs shrink-0 font-medium ${e.priority === 'must' ? 'text-red-400' : 'text-gray-400'}`}>
+            <span className={`text-xs shrink-0 font-medium ${
+              status === 'paid' ? 'text-emerald-400/70' :
+              e.priority === 'must' ? 'text-red-400' :
+              status === 'disabled' ? 'text-gray-500' :
+              'text-gray-400'
+            }`}>
               ${e.amount}
             </span>
-            <span className="text-xs text-indigo-400 shrink-0 bg-indigo-500/20 px-2 py-0.5 rounded-full">{e.month}</span>
+            <span className={`text-xs shrink-0 px-2 py-0.5 rounded-full ${
+              status === 'paid' ? 'text-emerald-400 bg-emerald-500/10' :
+              status === 'disabled' ? 'text-gray-500 bg-gray-500/10' :
+              'text-indigo-400 bg-indigo-500/20'
+            }`}>{e.month}</span>
             {e.priority === 'custom' && (
               <button
                 onClick={() => onRemove(e.id)}
@@ -130,7 +169,8 @@ function ExpensesCard({ expenses, onToggle, onRemove, onAdd }) {
               </button>
             )}
           </div>
-        ))}
+        );
+        })}
       </div>
       <div className="mt-4 pt-4 border-t border-white/10 flex flex-wrap gap-2">
         <input
@@ -160,6 +200,21 @@ function ExpensesCard({ expenses, onToggle, onRemove, onAdd }) {
         >
           +
         </button>
+      </div>
+      <div className="text-xs text-gray-400 mt-3 space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="text-indigo-400">◉</span>
+          <span>Upcoming (counts toward projection)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-emerald-400">✓</span>
+          <span>Paid (already paid, for reference only)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">○</span>
+          <span>Disabled (not applicable)</span>
+        </div>
+        <div className="text-xs text-gray-500 mt-2">Click the status icon to cycle through states</div>
       </div>
     </div>
   );
@@ -275,6 +330,87 @@ function SummaryCards({ projection, params }) {
   );
 }
 
+function BudgetBreakdownCard({ monthlySpend }) {
+  const fixedAmount = FIXED_MONTHLY;
+  const discretionaryAmount = monthlySpend - fixedAmount;
+  const fixedPercent = Math.round((fixedAmount / monthlySpend) * 100);
+  const discretionaryPercent = 100 - fixedPercent;
+  const weeklyDiscretionary = Math.round(discretionaryAmount / 4.33);
+
+  const fixedBreakdown = [
+    { name: 'Rent', amount: 2425 },
+    { name: 'Utilities/Internet/Phone', amount: 150 },
+  ];
+
+  return (
+    <div className="glass-card rounded-2xl p-5">
+      <h2 className="font-semibold text-sm mb-3 text-white">Monthly Budget Breakdown</h2>
+
+      {/* Visual bar */}
+      <div className="h-8 rounded-xl overflow-hidden flex mb-3">
+        <div
+          className="bg-gradient-to-r from-slate-600 to-slate-500 flex items-center justify-center"
+          style={{ width: `${fixedPercent}%` }}
+        >
+          <span className="text-xs font-medium text-white">Fixed ${fixedAmount}</span>
+        </div>
+        <div
+          className="bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center justify-center"
+          style={{ width: `${discretionaryPercent}%` }}
+        >
+          <span className="text-xs font-medium text-white">Discretionary ${discretionaryAmount}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Fixed expenses */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-3 h-3 rounded bg-slate-500"></div>
+            <span className="text-sm font-medium text-gray-300">Fixed ({fixedPercent}%)</span>
+          </div>
+          <div className="space-y-1 text-xs text-gray-400">
+            {fixedBreakdown.map(item => (
+              <div key={item.name} className="flex justify-between">
+                <span>{item.name}</span>
+                <span className="text-gray-300">${item.amount}</span>
+              </div>
+            ))}
+            <div className="pt-1 border-t border-white/10 flex justify-between font-medium text-gray-300">
+              <span>Total</span>
+              <span>${fixedAmount}</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Must pay every month
+          </p>
+        </div>
+
+        {/* Discretionary */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-3 h-3 rounded bg-indigo-500"></div>
+            <span className="text-sm font-medium text-gray-300">Discretionary ({discretionaryPercent}%)</span>
+          </div>
+          <div className="space-y-2">
+            <div className="text-center p-3 bg-indigo-500/10 rounded-xl">
+              <div className="text-2xl font-bold text-indigo-400">${discretionaryAmount}</div>
+              <div className="text-xs text-gray-400">per month</div>
+            </div>
+            <div className="text-center p-3 bg-purple-500/10 rounded-xl">
+              <div className="text-xl font-bold text-purple-400">${weeklyDiscretionary}</div>
+              <div className="text-xs text-gray-400">per week</div>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Groceries, dining, shopping, etc.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function IncomeBreakdownChart({ projection, params }) {
   const data = projection.map(p => ({
     month: p.month.replace(" '25", ''),
@@ -322,6 +458,7 @@ export default function YearlyProjection() {
           bonusMonth: 'Jan',
           subletterMonths: ['Feb'],
           subletterAmount: 2000,
+          creditCardDebt: 0,
         };
       }
     } catch (e) {
@@ -334,6 +471,7 @@ export default function YearlyProjection() {
       bonusMonth: 'Jan',
       subletterMonths: ['Feb'],
       subletterAmount: 2000,
+      creditCardDebt: 0,
     };
   });
 
@@ -363,9 +501,23 @@ export default function YearlyProjection() {
   };
 
   const toggleExpense = (id) => {
-    setExpenses(prev => prev.map(e =>
-      e.id === id ? { ...e, enabled: !e.enabled } : e
-    ));
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== id) return e;
+
+      // Cycle through states: upcoming -> paid -> disabled -> upcoming
+      const currentStatus = e.status || (e.enabled ? 'upcoming' : 'disabled');
+      let newStatus;
+
+      if (currentStatus === 'upcoming') {
+        newStatus = 'paid';
+      } else if (currentStatus === 'paid') {
+        newStatus = 'disabled';
+      } else {
+        newStatus = 'upcoming';
+      }
+
+      return { ...e, status: newStatus, enabled: newStatus === 'upcoming' }; // maintain backwards compat
+    }));
   };
 
   const removeExpense = (id) => {
@@ -395,10 +547,17 @@ export default function YearlyProjection() {
       const subletterIncome = params.subletterMonths.includes(monthName) ? params.subletterAmount : 0;
       const totalIncome = paycheckIncome + bonusIncome + subletterIncome;
 
+      // Only count 'upcoming' expenses (not 'paid' or 'disabled')
       const oneTimeThisMonth = expenses
-        .filter(e => e.enabled && e.month === monthName)
+        .filter(e => {
+          const status = e.status || (e.enabled ? 'upcoming' : 'disabled');
+          return status === 'upcoming' && e.month === monthName;
+        })
         .reduce((sum, e) => sum + e.amount, 0);
-      const totalExpenses = params.monthlySpend + oneTimeThisMonth;
+
+      // Add credit card debt to first month
+      const creditCardDebt = (i === 0 && params.creditCardDebt) ? params.creditCardDebt : 0;
+      const totalExpenses = params.monthlySpend + oneTimeThisMonth + creditCardDebt;
 
       const net = totalIncome - totalExpenses;
       balance += net;
@@ -436,6 +595,9 @@ export default function YearlyProjection() {
 
       {/* Summary Cards */}
       <SummaryCards projection={projection} params={params} />
+
+      {/* Budget Breakdown - Fixed vs Discretionary */}
+      <BudgetBreakdownCard monthlySpend={params.monthlySpend} />
 
       {/* Warning */}
       {lowestPoint < 0 && (

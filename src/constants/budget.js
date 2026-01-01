@@ -10,7 +10,7 @@ export const PAYDATES = [
 
 export const MONTHS = ['Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-export const FIXED_MONTHLY = 2625;
+export const FIXED_MONTHLY = 2575;
 export const MONTHLY_TARGET = 6400;
 export const MONTHLY_DISCRETIONARY = MONTHLY_TARGET - FIXED_MONTHLY;
 export const WEEKLY_DISCRETIONARY = Math.round(MONTHLY_DISCRETIONARY / 4.33);

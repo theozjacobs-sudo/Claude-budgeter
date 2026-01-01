@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import WeeklyTracker from './WeeklyTracker';
 import YearlyProjection from './YearlyProjection';
+import BankStatements from './BankStatements';
+import BalanceTracker from './BalanceTracker';
 
 function TabButton({ active, onClick, children }) {
   return (
@@ -31,7 +33,7 @@ export default function BudgetPlanner() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-3 justify-center">
+      <div className="flex gap-3 justify-center flex-wrap">
         <TabButton
           active={activeTab === 'weekly'}
           onClick={() => setActiveTab('weekly')}
@@ -44,10 +46,25 @@ export default function BudgetPlanner() {
         >
           Yearly Projection
         </TabButton>
+        <TabButton
+          active={activeTab === 'balances'}
+          onClick={() => setActiveTab('balances')}
+        >
+          Balance Tracker
+        </TabButton>
+        <TabButton
+          active={activeTab === 'statements'}
+          onClick={() => setActiveTab('statements')}
+        >
+          Statements
+        </TabButton>
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'weekly' ? <WeeklyTracker /> : <YearlyProjection />}
+      {activeTab === 'weekly' && <WeeklyTracker />}
+      {activeTab === 'projection' && <YearlyProjection />}
+      {activeTab === 'balances' && <BalanceTracker />}
+      {activeTab === 'statements' && <BankStatements />}
     </div>
   );
 }
