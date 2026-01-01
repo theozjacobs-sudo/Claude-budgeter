@@ -1,4 +1,5 @@
-export const PAYCHECK = 2712.77;
+// Bimonthly paycheck (24 payments/year) - calculated from previous biweekly: $2712.77 × 26 / 24
+export const PAYCHECK = 2938.84;
 
 // Bimonthly payment schedule: 15th and last day of each month
 export const PAYDATES = [
