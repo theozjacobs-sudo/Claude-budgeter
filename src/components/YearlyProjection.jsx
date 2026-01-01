@@ -287,10 +287,20 @@ function CustomTooltip({ active, payload, label }) {
             Net: {data.net >= 0 ? '+' : ''}${data.net?.toLocaleString()}
           </p>
           <p className="text-indigo-400 font-medium pt-1 border-t border-white/10">
-            Balance: ${data.balance?.toLocaleString()}
+            Projected: ${data.balance?.toLocaleString()}
           </p>
+          {data.actualBalance !== null && (
+            <>
+              <p className="text-emerald-400 font-medium">
+                Actual: ${data.actualBalance?.toLocaleString()}
+              </p>
+              <p className={`font-semibold ${data.variance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                Variance: {data.variance >= 0 ? '+' : ''}${data.variance?.toLocaleString()}
+              </p>
+            </>
+          )}
           {data.hasBonus && (
-            <p className="text-yellow-400">★ Includes bonus!</p>
+            <p className="text-yellow-400 pt-1 border-t border-white/10">★ Includes bonus!</p>
           )}
         </div>
       </div>
@@ -488,6 +498,19 @@ export default function YearlyProjection() {
     return DEFAULT_ONE_TIME_EXPENSES;
   });
 
+  // Load balance tracker data
+  const [actualBalances, setActualBalances] = useState(() => {
+    try {
+      const saved = localStorage.getItem('budget-planner-balances');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error('Error loading balances:', e);
+    }
+    return [];
+  });
+
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ params, expenses }));
@@ -495,6 +518,23 @@ export default function YearlyProjection() {
       console.error('Error saving:', e);
     }
   }, [params, expenses]);
+
+  // Listen for balance tracker updates
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const saved = localStorage.getItem('budget-planner-balances');
+        if (saved) {
+          setActualBalances(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.error('Error loading balances:', e);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const handleParamChange = (key, value) => {
     setParams(prev => ({ ...prev, [key]: value }));
@@ -562,9 +602,25 @@ export default function YearlyProjection() {
       const net = totalIncome - totalExpenses;
       balance += net;
 
+      // Find actual balance for this month (last entry of the month)
+      const monthEnd = new Date(year, monthNum + 1, 0); // Last day of month
+      const monthStart = new Date(year, monthNum, 1);
+
+      const actualBalancesThisMonth = actualBalances.filter(b => {
+        const bDate = new Date(b.date);
+        return bDate >= monthStart && bDate <= monthEnd;
+      });
+
+      const latestActual = actualBalancesThisMonth.length > 0
+        ? actualBalancesThisMonth[actualBalancesThisMonth.length - 1]
+        : null;
+
+      const actualBalance = latestActual ? latestActual.checking - latestActual.creditCard : null;
+
       data.push({
         month: monthName + (i === 0 ? " '25" : ''),
         balance: Math.round(balance),
+        actualBalance: actualBalance !== null ? Math.round(actualBalance) : null,
         income: Math.round(totalIncome),
         expenses: Math.round(totalExpenses),
         net: Math.round(net),
@@ -572,10 +628,11 @@ export default function YearlyProjection() {
         bonusIncome: Math.round(bonusIncome),
         subletterIncome: Math.round(subletterIncome),
         hasBonus: bonusIncome > 0,
+        variance: actualBalance !== null ? Math.round(actualBalance - balance) : null,
       });
     }
     return data;
-  }, [params, expenses]);
+  }, [params, expenses, actualBalances]);
 
   const lowestPoint = Math.min(...projection.map(p => p.balance));
   const endBalance = projection[projection.length - 1].balance;
@@ -647,6 +704,7 @@ export default function YearlyProjection() {
               dataKey="balance"
               stroke="url(#lineGradient)"
               strokeWidth={3}
+              name="Projected"
               dot={(props) => {
                 const { cx, cy, payload } = props;
                 if (payload.hasBonus) {
@@ -660,9 +718,34 @@ export default function YearlyProjection() {
               }}
               activeDot={{ r: 6, fill: '#818cf8', strokeWidth: 0 }}
             />
+            <Line
+              type="monotone"
+              dataKey="actualBalance"
+              stroke="#22c55e"
+              strokeWidth={3}
+              name="Actual"
+              dot={(props) => {
+                const { payload } = props;
+                if (payload.actualBalance === null) return null;
+                return (
+                  <circle
+                    cx={props.cx}
+                    cy={props.cy}
+                    r={5}
+                    fill="#22c55e"
+                    stroke="#86efac"
+                    strokeWidth={2}
+                  />
+                );
+              }}
+              connectNulls={false}
+              activeDot={{ r: 6, fill: '#22c55e', strokeWidth: 0 }}
+            />
           </ComposedChart>
         </ResponsiveContainer>
         <div className="flex justify-center gap-4 mt-2 text-xs text-gray-400">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-indigo-500"></span> Projected</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Actual</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-500"></span> Bonus month</span>
           <span className="flex items-center gap-1"><span className="w-8 h-0.5 bg-red-500"></span> Zero line</span>
           <span className="flex items-center gap-1"><span className="w-8 h-0.5 bg-emerald-500 opacity-50"></span> $1k buffer</span>
