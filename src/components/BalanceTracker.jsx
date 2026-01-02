@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import { PAYCHECK, PAYDATES } from '../constants/budget';
 
 const BALANCE_STORAGE_KEY = 'budget-planner-balances';
 
-function BalanceEntry({ entry, onDelete }) {
+function BalanceEntry({ entry, previousEntry, onDelete }) {
   const date = new Date(entry.date);
   const formattedDate = date.toLocaleDateString('en-US', {
     month: 'short',
@@ -12,6 +13,38 @@ function BalanceEntry({ entry, onDelete }) {
 
   const totalBalance = entry.checking - entry.creditCard;
   const netPositive = totalBalance >= 0;
+
+  // Calculate spending between this entry and the previous one
+  let spendingData = null;
+  if (previousEntry) {
+    const prevDate = new Date(previousEntry.date);
+    const currentDate = new Date(entry.date);
+    const daysBetween = Math.round((currentDate - prevDate) / (1000 * 60 * 60 * 24));
+    const weeksBetween = daysBetween / 7;
+
+    // Count paychecks between the two dates
+    const paychecksReceived = PAYDATES.filter(paydate => {
+      const pd = new Date(paydate);
+      return pd > prevDate && pd <= currentDate;
+    }).length;
+
+    const incomeReceived = paychecksReceived * PAYCHECK;
+    const prevNetBalance = previousEntry.checking - previousEntry.creditCard;
+    const currentNetBalance = totalBalance;
+
+    // Spending = Previous Balance + Income - Current Balance
+    const totalSpending = prevNetBalance + incomeReceived - currentNetBalance;
+    const weeklySpending = weeksBetween > 0 ? totalSpending / weeksBetween : 0;
+
+    spendingData = {
+      totalSpending,
+      weeklySpending,
+      daysBetween,
+      weeksBetween,
+      paychecksReceived,
+      incomeReceived
+    };
+  }
 
   return (
     <div className="glass-card rounded-xl p-4 group hover:scale-[1.02] transition-all">
@@ -48,6 +81,31 @@ function BalanceEntry({ entry, onDelete }) {
           </span>
         </div>
       </div>
+
+      {spendingData && (
+        <div className="pt-3 border-t border-white/10 space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-gray-400">Weekly Spending</span>
+            <span className="text-lg font-bold text-purple-400">
+              ${spendingData.weeklySpending.toFixed(2)}/week
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="bg-white/5 rounded px-2 py-1.5">
+              <div className="text-gray-500 text-[10px]">Period</div>
+              <div className="text-gray-300 font-semibold">{spendingData.daysBetween} days</div>
+            </div>
+            <div className="bg-white/5 rounded px-2 py-1.5">
+              <div className="text-gray-500 text-[10px]">Paychecks</div>
+              <div className="text-emerald-400 font-semibold">{spendingData.paychecksReceived}</div>
+            </div>
+            <div className="bg-white/5 rounded px-2 py-1.5">
+              <div className="text-gray-500 text-[10px]">Total Spent</div>
+              <div className="text-orange-400 font-semibold">${Math.round(spendingData.totalSpending)}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -169,10 +227,11 @@ export default function BalanceTracker() {
       {balances.length > 0 ? (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-white px-1">Balance History</h3>
-          {balances.map(entry => (
+          {balances.map((entry, index) => (
             <BalanceEntry
               key={entry.id}
               entry={entry}
+              previousEntry={balances[index + 1] || null}
               onDelete={() => handleDeleteEntry(entry.id)}
             />
           ))}
