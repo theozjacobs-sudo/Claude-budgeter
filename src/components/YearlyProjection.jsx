@@ -645,16 +645,27 @@ export default function YearlyProjection() {
   const lowestPoint = Math.min(...projection.map(p => p.balance));
   const endBalance = projection[projection.length - 1].balance;
 
+  // Find most recent actual balance
+  const mostRecentActual = projection
+    .slice()
+    .reverse()
+    .find(p => p.actualBalance !== null);
+
+  const displayBalance = mostRecentActual ? mostRecentActual.actualBalance : endBalance;
+  const displayLabel = mostRecentActual
+    ? `Current balance (${mostRecentActual.month})`
+    : "Dec '26 projected";
+
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <h1 className="text-xl font-bold text-white">2025/26 Projection</h1>
         <div className="glass-card rounded-xl px-4 py-3 text-right">
-          <div className={`text-2xl font-bold ${endBalance >= 0 ? 'gradient-text' : 'gradient-text-red'}`}>
-            ${endBalance.toLocaleString()}
+          <div className={`text-2xl font-bold ${displayBalance >= 0 ? 'gradient-text' : 'gradient-text-red'}`}>
+            ${displayBalance.toLocaleString()}
           </div>
-          <div className="text-xs text-gray-400">Dec '26 balance</div>
+          <div className="text-xs text-gray-400">{displayLabel}</div>
         </div>
       </div>
 
