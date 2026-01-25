@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ReferenceLine } from 'recharts';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Set worker source for PDF.js - use unpkg which is more reliable
