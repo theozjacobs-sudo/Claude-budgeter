@@ -848,6 +848,7 @@ function getWeekKey(dateStr) {
 function WeeklySpendingChart({ transactions }) {
   const [showCategories, setShowCategories] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState(new Set());
+  const [includeRent, setIncludeRent] = useState(true);
 
   // Group transactions by week
   const weeklyData = useMemo(() => {
@@ -886,12 +887,14 @@ function WeeklySpendingChart({ transactions }) {
         weekData[category] = (weekData[category] || 0) + Math.abs(t.amount);
       });
 
-    // Add rent to weeks containing the 22nd
-    weekMap.forEach((weekData, week) => {
-      if (weekContains22nd(week)) {
-        weekData['Rent'] = (weekData['Rent'] || 0) + 2425;
-      }
-    });
+    // Add rent to weeks containing the 22nd (if enabled)
+    if (includeRent) {
+      weekMap.forEach((weekData, week) => {
+        if (weekContains22nd(week)) {
+          weekData['Rent'] = (weekData['Rent'] || 0) + 2425;
+        }
+      });
+    }
 
     // Convert to array format for chart
     return Array.from(weekMap.entries())
@@ -912,7 +915,7 @@ function WeeklySpendingChart({ transactions }) {
         };
         return parseWeek(a.name) - parseWeek(b.name);
       });
-  }, [transactions]);
+  }, [transactions, includeRent]);
 
   // Get all unique categories
   const allCategories = useMemo(() => {
@@ -965,6 +968,16 @@ function WeeklySpendingChart({ transactions }) {
         <h3 className="font-semibold text-white">Weekly Spending</h3>
         <div className="flex gap-2">
           <button
+            onClick={() => setIncludeRent(!includeRent)}
+            className={`text-xs px-2 py-1 rounded-lg ${
+              includeRent
+                ? 'text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20'
+                : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'
+            }`}
+          >
+            {includeRent ? '✓' : ''} Rent
+          </button>
+          <button
             onClick={() => setShowCategories(!showCategories)}
             className="text-xs text-indigo-400 hover:text-indigo-300 px-2 py-1 rounded-lg hover:bg-indigo-500/10"
           >
@@ -989,7 +1002,9 @@ function WeeklySpendingChart({ transactions }) {
         </div>
       </div>
       <p className="text-xs text-gray-500 mb-3">
-        {showCategories ? 'Click categories to show/hide breakdown' : 'Scroll to see all weeks'} • Rent ($2,425) included in weeks with 22nd • Green line shows average
+        {showCategories ? 'Click categories to show/hide breakdown' : 'Scroll to see all weeks'}
+        {includeRent && ' • Rent ($2,425) on weeks with 22nd'}
+        {' • '}Green line shows average
       </p>
 
       <div className="overflow-x-auto pb-2">
