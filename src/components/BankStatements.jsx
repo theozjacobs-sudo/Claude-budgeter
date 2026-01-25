@@ -807,6 +807,251 @@ function getUniqueMonths(transactions) {
   });
 }
 
+// Helper to get week key from date string (week of year)
+function getWeekKey(dateStr) {
+  if (!dateStr) return 'Unknown';
+  const parts = dateStr.split('/');
+  if (parts.length >= 2) {
+    const month = parseInt(parts[0], 10);
+    const day = parseInt(parts[1], 10);
+    let year;
+
+    if (parts.length >= 3) {
+      year = parseInt(parts[2], 10);
+      if (year < 100) year += 2000; // Convert 2-digit year
+    } else {
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+      year = month > currentMonth ? currentYear - 1 : currentYear;
+    }
+
+    const date = new Date(year, month - 1, day);
+
+    // Get the start of the week (Sunday)
+    const dayOfWeek = date.getDay();
+    const weekStart = new Date(date);
+    weekStart.setDate(date.getDate() - dayOfWeek);
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const weekMonth = weekStart.getMonth();
+    const weekDay = weekStart.getDate();
+    const weekYear = weekStart.getFullYear().toString().slice(-2);
+
+    return `${monthNames[weekMonth]} ${weekDay} '${weekYear}`;
+  }
+  return 'Unknown';
+}
+
+// Weekly Spending Chart Component
+function WeeklySpendingChart({ transactions }) {
+  const [showCategories, setShowCategories] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState(new Set());
+
+  // Group transactions by week
+  const weeklyData = useMemo(() => {
+    const weekMap = new Map();
+
+    transactions
+      .filter(t => t.amount < 0 && !EXCLUDED_FROM_EXPENSES.includes(t.category))
+      .forEach(t => {
+        const week = getWeekKey(t.date);
+        if (!weekMap.has(week)) {
+          weekMap.set(week, {});
+        }
+        const weekData = weekMap.get(week);
+        const category = t.category || 'Other';
+        weekData[category] = (weekData[category] || 0) + Math.abs(t.amount);
+      });
+
+    // Convert to array format for chart
+    return Array.from(weekMap.entries())
+      .map(([week, categories]) => ({
+        name: week,
+        ...categories,
+        total: Object.values(categories).reduce((sum, val) => sum + val, 0)
+      }))
+      .sort((a, b) => {
+        // Parse dates for sorting
+        const parseWeek = (weekStr) => {
+          const parts = weekStr.split(' ');
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const month = monthNames.indexOf(parts[0]);
+          const day = parseInt(parts[1]);
+          const year = parseInt(parts[2].replace("'", '')) + 2000;
+          return new Date(year, month, day).getTime();
+        };
+        return parseWeek(a.name) - parseWeek(b.name);
+      });
+  }, [transactions]);
+
+  // Get all unique categories
+  const allCategories = useMemo(() => {
+    const cats = new Set();
+    weeklyData.forEach(week => {
+      Object.keys(week).forEach(key => {
+        if (key !== 'name' && key !== 'total') cats.add(key);
+      });
+    });
+    return Array.from(cats).sort();
+  }, [weeklyData]);
+
+  // Initialize selected categories
+  useEffect(() => {
+    if (selectedCategories.size === 0 && allCategories.length > 0) {
+      setSelectedCategories(new Set(allCategories));
+    }
+  }, [allCategories]);
+
+  const toggleCategory = (cat) => {
+    setSelectedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(cat)) {
+        newSet.delete(cat);
+      } else {
+        newSet.add(cat);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedCategories(new Set(allCategories));
+  };
+
+  const clearAll = () => {
+    setSelectedCategories(new Set());
+  };
+
+  if (weeklyData.length === 0) return null;
+
+  return (
+    <div className="glass-card rounded-2xl p-5">
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="font-semibold text-white">Weekly Spending</h3>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCategories(!showCategories)}
+            className="text-xs text-indigo-400 hover:text-indigo-300 px-2 py-1 rounded-lg hover:bg-indigo-500/10"
+          >
+            {showCategories ? 'Hide' : 'Show'} Categories
+          </button>
+          {showCategories && (
+            <>
+              <button
+                onClick={selectAll}
+                className="text-xs text-indigo-400 hover:text-indigo-300 px-2 py-1 rounded-lg hover:bg-indigo-500/10"
+              >
+                Select All
+              </button>
+              <button
+                onClick={clearAll}
+                className="text-xs text-gray-400 hover:text-gray-300 px-2 py-1 rounded-lg hover:bg-white/5"
+              >
+                Clear All
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <p className="text-xs text-gray-500 mb-3">
+        {showCategories ? 'Click categories to show/hide breakdown' : 'Scroll to see all weeks'}
+      </p>
+
+      <div className="overflow-x-auto pb-2">
+        <div style={{ minWidth: `${weeklyData.length * 60}px` }}>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={weeklyData}>
+              <XAxis
+                dataKey="name"
+                tick={{ fill: '#9ca3af', fontSize: 10 }}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} tickFormatter={v => `$${v}`} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    const total = payload.reduce((sum, entry) => sum + (entry.value || 0), 0);
+                    return (
+                      <div className="glass-card rounded-lg p-3 text-sm border border-white/20">
+                        <p className="text-white font-bold mb-2">{label}</p>
+                        {showCategories ? (
+                          <div className="space-y-1 text-xs max-h-48 overflow-y-auto">
+                            {payload.map((entry, index) => (
+                              <div key={index} className="flex justify-between gap-3">
+                                <span className="flex items-center gap-1.5">
+                                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                  <span className="text-gray-300">{entry.name}</span>
+                                </span>
+                                <span className="text-white font-medium">${Math.round(entry.value)}</span>
+                              </div>
+                            ))}
+                            <div className="pt-2 mt-2 border-t border-white/20 flex justify-between font-bold">
+                              <span className="text-gray-300">Total</span>
+                              <span className="text-white">${Math.round(total)}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between font-bold">
+                            <span className="text-gray-300">Total Spent</span>
+                            <span className="text-white">${Math.round(total)}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              {showCategories ? (
+                allCategories.map(cat => (
+                  selectedCategories.has(cat) && (
+                    <Bar
+                      key={cat}
+                      dataKey={cat}
+                      stackId="a"
+                      fill={CATEGORY_COLORS[cat] || '#6b7280'}
+                    />
+                  )
+                ))
+              ) : (
+                <Bar dataKey="total" fill="#6366f1" radius={[4, 4, 0, 0]} />
+              )}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {showCategories && (
+        <div className="flex flex-wrap gap-2 mt-3 justify-center">
+          {allCategories.map(cat => {
+            const isSelected = selectedCategories.has(cat);
+            return (
+              <button
+                key={cat}
+                onClick={() => toggleCategory(cat)}
+                className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition-all ${
+                  isSelected
+                    ? 'bg-white/10 text-white border border-white/20'
+                    : 'bg-white/5 text-gray-500 border border-transparent'
+                }`}
+              >
+                <div
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: CATEGORY_COLORS[cat] || '#6b7280' }}
+                />
+                {cat}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Custom tooltip for monthly spending chart
 function MonthlySpendingTooltip({ active, payload, label }) {
   if (active && payload && payload.length) {
@@ -1890,6 +2135,9 @@ export default function BankStatements() {
         <>
           {/* Monthly spending overview bar chart - shows all months */}
           <MonthlySpendingChart transactions={transactions} />
+
+          {/* Weekly spending chart */}
+          <WeeklySpendingChart transactions={transactions} />
 
           {/* Bike & Scooter dedicated tracker */}
           <BikeScooterTracker transactions={transactions} />
