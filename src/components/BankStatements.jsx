@@ -766,7 +766,25 @@ function getMonthKey(dateStr) {
   const parts = dateStr.split('/');
   if (parts.length >= 2) {
     const month = parseInt(parts[0], 10);
-    const year = parts.length >= 3 ? parts[2] : new Date().getFullYear().toString().slice(-2);
+    let year;
+
+    if (parts.length >= 3) {
+      // Year is provided
+      year = parts[2];
+    } else {
+      // Infer year: if month is in the future, assume last year
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1; // 1-12
+      const currentYear = now.getFullYear();
+
+      // If transaction month is greater than current month, it's likely from last year
+      if (month > currentMonth) {
+        year = (currentYear - 1).toString();
+      } else {
+        year = currentYear.toString();
+      }
+    }
+
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${monthNames[month - 1]} '${year.slice(-2)}`;
   }
