@@ -519,6 +519,28 @@ export default function YearlyProjection() {
     }
   }, [params, expenses]);
 
+  // Refresh balances from localStorage periodically (in case we missed an update)
+  useEffect(() => {
+    const refreshBalances = () => {
+      try {
+        const saved = localStorage.getItem('budget-planner-balances');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setActualBalances(parsed);
+        }
+      } catch (e) {
+        console.error('Error refreshing balances:', e);
+      }
+    };
+
+    // Refresh on mount
+    refreshBalances();
+
+    // Also refresh every 2 seconds to catch any updates
+    const interval = setInterval(refreshBalances, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Listen for balance tracker updates
   useEffect(() => {
     const handleBalanceUpdate = (event) => {
@@ -614,13 +636,15 @@ export default function YearlyProjection() {
       const monthEnd = new Date(year, monthNum + 1, 0); // Last day of month
       const monthStart = new Date(year, monthNum, 1);
 
-      const actualBalancesThisMonth = actualBalances.filter(b => {
-        const bDate = new Date(b.date);
-        return bDate >= monthStart && bDate <= monthEnd;
-      });
+      const actualBalancesThisMonth = actualBalances
+        .filter(b => {
+          const bDate = new Date(b.date);
+          return bDate >= monthStart && bDate <= monthEnd;
+        })
+        .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort descending (most recent first)
 
       const latestActual = actualBalancesThisMonth.length > 0
-        ? actualBalancesThisMonth[actualBalancesThisMonth.length - 1]
+        ? actualBalancesThisMonth[0] // First item is most recent
         : null;
 
       const actualBalance = latestActual ? latestActual.checking - latestActual.creditCard : null;
