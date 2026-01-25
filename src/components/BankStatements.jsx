@@ -130,6 +130,7 @@ const CATEGORY_COLORS = {
   'Bars': '#eab308',
   'Travel': '#06b6d4',
   'Payment': '#4ade80',
+  'Rent': '#475569', // Slate gray for rent
   'Other': '#9ca3af',
   'Rent + Utils': '#475569', // Slate gray for fixed expenses
 };
@@ -852,6 +853,27 @@ function WeeklySpendingChart({ transactions }) {
   const weeklyData = useMemo(() => {
     const weekMap = new Map();
 
+    // Helper to check if a week contains the 22nd
+    const weekContains22nd = (weekStr) => {
+      const parts = weekStr.split(' ');
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const month = monthNames.indexOf(parts[0]);
+      const day = parseInt(parts[1]);
+      const year = parseInt(parts[2].replace("'", '')) + 2000;
+
+      const weekStart = new Date(year, month, day);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+
+      // Check if 22nd falls within this week
+      for (let d = new Date(weekStart); d <= weekEnd; d.setDate(d.getDate() + 1)) {
+        if (d.getDate() === 22) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     transactions
       .filter(t => t.amount < 0 && !EXCLUDED_FROM_EXPENSES.includes(t.category))
       .forEach(t => {
@@ -863,6 +885,13 @@ function WeeklySpendingChart({ transactions }) {
         const category = t.category || 'Other';
         weekData[category] = (weekData[category] || 0) + Math.abs(t.amount);
       });
+
+    // Add rent to weeks containing the 22nd
+    weekMap.forEach((weekData, week) => {
+      if (weekContains22nd(week)) {
+        weekData['Rent'] = (weekData['Rent'] || 0) + 2425;
+      }
+    });
 
     // Convert to array format for chart
     return Array.from(weekMap.entries())
@@ -923,6 +952,11 @@ function WeeklySpendingChart({ transactions }) {
     setSelectedCategories(new Set());
   };
 
+  // Calculate average weekly spending
+  const averageSpending = weeklyData.length > 0
+    ? weeklyData.reduce((sum, week) => sum + week.total, 0) / weeklyData.length
+    : 0;
+
   if (weeklyData.length === 0) return null;
 
   return (
@@ -955,7 +989,7 @@ function WeeklySpendingChart({ transactions }) {
         </div>
       </div>
       <p className="text-xs text-gray-500 mb-3">
-        {showCategories ? 'Click categories to show/hide breakdown' : 'Scroll to see all weeks'}
+        {showCategories ? 'Click categories to show/hide breakdown' : 'Scroll to see all weeks'} • Rent ($2,425) included in weeks with 22nd • Green line shows average
       </p>
 
       <div className="overflow-x-auto pb-2">
@@ -1019,6 +1053,18 @@ function WeeklySpendingChart({ transactions }) {
               ) : (
                 <Bar dataKey="total" fill="#6366f1" radius={[4, 4, 0, 0]} />
               )}
+              <ReferenceLine
+                y={averageSpending}
+                stroke="#22c55e"
+                strokeDasharray="3 3"
+                strokeWidth={2}
+                label={{
+                  value: `Avg: $${Math.round(averageSpending)}`,
+                  fill: '#22c55e',
+                  fontSize: 11,
+                  position: 'right'
+                }}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
