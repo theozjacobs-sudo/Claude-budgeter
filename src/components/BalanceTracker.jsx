@@ -124,6 +124,8 @@ export default function BalanceTracker() {
   // Save to localStorage whenever balances change
   useEffect(() => {
     localStorage.setItem(BALANCE_STORAGE_KEY, JSON.stringify(balances));
+    // Dispatch custom event to notify other components
+    window.dispatchEvent(new CustomEvent('balanceTrackerUpdate', { detail: balances }));
   }, [balances]);
 
   const handleAddBalance = () => {

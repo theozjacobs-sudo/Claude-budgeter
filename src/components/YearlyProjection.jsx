@@ -521,19 +521,27 @@ export default function YearlyProjection() {
 
   // Listen for balance tracker updates
   useEffect(() => {
-    const handleStorageChange = () => {
+    const handleBalanceUpdate = (event) => {
       try {
-        const saved = localStorage.getItem('budget-planner-balances');
-        if (saved) {
-          setActualBalances(JSON.parse(saved));
+        if (event.detail) {
+          setActualBalances(event.detail);
+        } else {
+          const saved = localStorage.getItem('budget-planner-balances');
+          if (saved) {
+            setActualBalances(JSON.parse(saved));
+          }
         }
       } catch (e) {
         console.error('Error loading balances:', e);
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('balanceTrackerUpdate', handleBalanceUpdate);
+    window.addEventListener('storage', handleBalanceUpdate); // for cross-tab updates
+    return () => {
+      window.removeEventListener('balanceTrackerUpdate', handleBalanceUpdate);
+      window.removeEventListener('storage', handleBalanceUpdate);
+    };
   }, []);
 
   const handleParamChange = (key, value) => {
